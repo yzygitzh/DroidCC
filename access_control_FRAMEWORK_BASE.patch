@@ -1,6 +1,6 @@
-From 717af32de8151ce0a0a656453875321602928c9b Mon Sep 17 00:00:00 2001
+From 3d28633799b1e1f05fb7bbb7e4a3df3f64a726dc Mon Sep 17 00:00:00 2001
 From: Ziyue Yang <yzylivezh@hotmail.com>
-Date: Mon, 10 Apr 2017 20:26:21 +0800
+Date: Mon, 10 Apr 2017 21:44:46 +0800
 Subject: [PATCH] access control patch
 
 ---
@@ -12,9 +12,10 @@ Subject: [PATCH] access control patch
  core/java/android/content/Context.java             |  2 +
  core/java/android/os/IDroidCCService.aidl          | 13 ++++
  core/java/android/view/View.java                   | 40 ++++++++++++
- .../java/com/android/server/DroidCCService.java    | 74 ++++++++++++++++++++++
- services/java/com/android/server/SystemServer.java | 10 +++
- 10 files changed, 235 insertions(+)
+ .../java/com/android/server/DroidCCService.java    | 73 ++++++++++++++++++++++
+ .../android/server/pm/PackageManagerService.java   | 35 ++++++++---
+ services/java/com/android/server/SystemServer.java |  8 +++
+ 11 files changed, 258 insertions(+), 9 deletions(-)
  create mode 100644 core/java/android/app/DroidCCManager.java
  create mode 100644 core/java/android/os/IDroidCCService.aidl
  create mode 100644 services/core/java/com/android/server/DroidCCService.java
@@ -32,7 +33,7 @@ index 99e0c46..9a73dd4 100644
  	core/java/android/os/IMessenger.aidl \
  	core/java/android/os/INetworkActivityListener.aidl \
 diff --git a/api/current.txt b/api/current.txt
-index d7fdb2d..912de7f 100644
+index d7fdb2d..2449e6a 100644
 --- a/api/current.txt
 +++ b/api/current.txt
 @@ -4187,6 +4187,12 @@ package android.app {
@@ -41,7 +42,7 @@ index d7fdb2d..912de7f 100644
  
 +  public class DroidCCManager {
 +    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
-+    method public java.util.Map<java.lang.String, java.lang.Boolean> getPermTable(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
++    method public boolean checkPermission(java.lang.String);
 +    method public void setView(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +  }
 +
@@ -61,7 +62,7 @@ index d7fdb2d..912de7f 100644
    }
  
 +  public abstract interface IDroidCCService implements android.os.IInterface {
-+    method public abstract java.util.Map getPermTable(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
++    method public abstract boolean checkPermission(java.lang.String) throws android.os.RemoteException;
 +    method public abstract void setView(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +  }
 +
@@ -84,7 +85,7 @@ index d7fdb2d..912de7f 100644
      method public int getVisibility();
      method public final int getWidth();
 diff --git a/api/system-current.txt b/api/system-current.txt
-index 3c88e59..d3e74c3 100644
+index 3c88e59..64dddbf 100644
 --- a/api/system-current.txt
 +++ b/api/system-current.txt
 @@ -4304,6 +4304,12 @@ package android.app {
@@ -93,7 +94,7 @@ index 3c88e59..d3e74c3 100644
  
 +  public class DroidCCManager {
 +    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
-+    method public java.util.Map<java.lang.String, java.lang.Boolean> getPermTable(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
++    method public boolean checkPermission(java.lang.String);
 +    method public void setView(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +  }
 +
@@ -113,7 +114,7 @@ index 3c88e59..d3e74c3 100644
    }
  
 +  public abstract interface IDroidCCService implements android.os.IInterface {
-+    method public abstract java.util.Map getPermTable(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
++    method public abstract boolean checkPermission(java.lang.String) throws android.os.RemoteException;
 +    method public abstract void setView(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +  }
 +
@@ -137,7 +138,7 @@ index 3c88e59..d3e74c3 100644
      method public final int getWidth();
 diff --git a/core/java/android/app/DroidCCManager.java b/core/java/android/app/DroidCCManager.java
 new file mode 100644
-index 0000000..aaaa371
+index 0000000..8bce82e
 --- /dev/null
 +++ b/core/java/android/app/DroidCCManager.java
 @@ -0,0 +1,45 @@
@@ -176,14 +177,14 @@ index 0000000..aaaa371
 +        }
 +    }
 +
-+    public Map<String, Boolean> getPermTable(List<String> idxList, List<String> viewStrList) {
++    public boolean checkPermission(String permission){
 +        try {
-+            return (Map<String, Boolean>)mService.getPermTable(idxList, viewStrList);
++            return mService.checkPermission(permission);
 +        } catch(Exception e) {
 +            Log.e("DroidCCManager", e.toString());
 +            e.printStackTrace();
 +        }
-+        return null;
++        return true;
 +    }
 +}
 \ No newline at end of file
@@ -230,7 +231,7 @@ index 758b6ff..ec2288e 100644
       * process and user ID running in the system.
 diff --git a/core/java/android/os/IDroidCCService.aidl b/core/java/android/os/IDroidCCService.aidl
 new file mode 100644
-index 0000000..6b7fe51
+index 0000000..c8a0226
 --- /dev/null
 +++ b/core/java/android/os/IDroidCCService.aidl
 @@ -0,0 +1,13 @@
@@ -245,7 +246,7 @@ index 0000000..6b7fe51
 +     * and return values in AIDL.
 +     */
 +    void setView(in List<String> idxList, in List<String> viewStrList);
-+    Map getPermTable(in List<String> idxList, in List<String> viewStrList);
++    boolean checkPermission(String permission);
 +}
 diff --git a/core/java/android/view/View.java b/core/java/android/view/View.java
 index dea004e..1e23539 100644
@@ -321,10 +322,10 @@ index dea004e..1e23539 100644
       *
 diff --git a/services/core/java/com/android/server/DroidCCService.java b/services/core/java/com/android/server/DroidCCService.java
 new file mode 100644
-index 0000000..c43c142
+index 0000000..501e9ac
 --- /dev/null
 +++ b/services/core/java/com/android/server/DroidCCService.java
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,73 @@
 +package com.android.server;
 +
 +import android.app.ActivityManager;
@@ -365,11 +366,11 @@ index 0000000..c43c142
 +    private static Map<Integer, ViewKey> latestViewMap = new HashMap<>();
 +    private static Map<ViewKey, ViewInfo> viewInfoMap = new HashMap<>();
 +    private static Map<ViewKey, Map<String, Boolean>> viewPermMap = new HashMap<>();
++    ViewKey currView;
 +    Context mContext;
 +
 +    public DroidCCService(Context context) {
 +        mContext = context;
-+        Log.d("DroidCCService: ", "START");
 +    }
 +
 +    private ViewKey genViewKey(List<String> idxList) {
@@ -381,7 +382,6 @@ index 0000000..c43c142
 +        ActivityManager am = (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
 +        List<ActivityManager.RunningTaskInfo> taskInfo = am.getRunningTasks(1);
 +        String topActivityName = taskInfo.get(0).topActivity.getClassName();
-+        Log.d("DroidCCService: topActivity: ", topActivityName);
 +
 +        return new ViewKey(topActivityName, idxListJoin);
 +    }
@@ -389,45 +389,116 @@ index 0000000..c43c142
 +    @Override
 +    public void setView(List<String> idxList, List<String> viewStrList) throws RemoteException {
 +        int callingUid = Binder.getCallingUid();
-+        ViewKey k = genViewKey(idxList);
-+        viewPermMap.put(k, new HashMap<String, Boolean>());
++        currView = genViewKey(idxList);
++        viewPermMap.put(currView, new HashMap<String, Boolean>());
 +    }
 +
 +    @Override
-+    public Map getPermTable(List<String> idxList, List<String> viewStrList) throws RemoteException {
-+        ViewKey k = genViewKey(idxList);
-+        return viewPermMap.get(k);
++    public boolean checkPermission(String permission) throws RemoteException {
++        Log.d("DroidCCService: checking permission: ", permission);
++        return true;
 +    }
 +}
 \ No newline at end of file
+diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
+index 7654cc9..153c96e 100644
+--- a/services/core/java/com/android/server/pm/PackageManagerService.java
++++ b/services/core/java/com/android/server/pm/PackageManagerService.java
+@@ -87,6 +87,7 @@ import android.Manifest;
+ import android.app.ActivityManager;
+ import android.app.ActivityManagerNative;
+ import android.app.AppGlobals;
++import android.app.DroidCCManager;
+ import android.app.IActivityManager;
+ import android.app.admin.IDevicePolicyManager;
+ import android.app.backup.IBackupManager;
+@@ -3169,16 +3170,22 @@ public class PackageManagerService extends IPackageManager.Stub {
+         }
+ 
+         synchronized (mPackages) {
++            // Get DroidCC service
++            DroidCCManager dcm  = (DroidCCManager) mContext.getSystemService("droid_cc");
+             final PackageParser.Package p = mPackages.get(pkgName);
+             if (p != null && p.mExtras != null) {
+                 final PackageSetting ps = (PackageSetting) p.mExtras;
+                 final PermissionsState permissionsState = ps.getPermissionsState();
+-                if (permissionsState.hasPermission(permName, userId)) {
++                if (permissionsState.hasPermission(permName, userId) &&
++                    // DroidCC: check permission
++                    dcm.checkPermission(permName)) {
+                     return PackageManager.PERMISSION_GRANTED;
+                 }
+                 // Special case: ACCESS_FINE_LOCATION permission includes ACCESS_COARSE_LOCATION
+-                if (Manifest.permission.ACCESS_COARSE_LOCATION.equals(permName) && permissionsState
+-                        .hasPermission(Manifest.permission.ACCESS_FINE_LOCATION, userId)) {
++                if (Manifest.permission.ACCESS_COARSE_LOCATION.equals(permName) &&
++                    permissionsState.hasPermission(Manifest.permission.ACCESS_FINE_LOCATION, userId) &&
++                    // DroidCC: check permission
++                    dcm.checkPermission(permName)) {
+                     return PackageManager.PERMISSION_GRANTED;
+                 }
+             }
+@@ -3197,25 +3204,35 @@ public class PackageManagerService extends IPackageManager.Stub {
+ 
+         synchronized (mPackages) {
+             Object obj = mSettings.getUserIdLPr(UserHandle.getAppId(uid));
++            // Get DroidCC service
++            DroidCCManager dcm = (DroidCCManager) mContext.getSystemService("droid_cc");
+             if (obj != null) {
+                 final SettingBase ps = (SettingBase) obj;
+                 final PermissionsState permissionsState = ps.getPermissionsState();
+-                if (permissionsState.hasPermission(permName, userId)) {
++                if (permissionsState.hasPermission(permName, userId) &&
++                    // DroidCC: check permission
++                    dcm.checkPermission(permName)) {
+                     return PackageManager.PERMISSION_GRANTED;
+                 }
+                 // Special case: ACCESS_FINE_LOCATION permission includes ACCESS_COARSE_LOCATION
+-                if (Manifest.permission.ACCESS_COARSE_LOCATION.equals(permName) && permissionsState
+-                        .hasPermission(Manifest.permission.ACCESS_FINE_LOCATION, userId)) {
++                if (Manifest.permission.ACCESS_COARSE_LOCATION.equals(permName) &&
++                    permissionsState.hasPermission(Manifest.permission.ACCESS_FINE_LOCATION, userId) &&
++                    // DroidCC: check permission
++                    dcm.checkPermission(permName)) {
+                     return PackageManager.PERMISSION_GRANTED;
+                 }
+             } else {
+                 ArraySet<String> perms = mSystemPermissions.get(uid);
+                 if (perms != null) {
+-                    if (perms.contains(permName)) {
++                    if (perms.contains(permName) &&
++                        // DroidCC: check permission
++                        dcm.checkPermission(permName)) {
+                         return PackageManager.PERMISSION_GRANTED;
+                     }
+-                    if (Manifest.permission.ACCESS_COARSE_LOCATION.equals(permName) && perms
+-                            .contains(Manifest.permission.ACCESS_FINE_LOCATION)) {
++                    if (Manifest.permission.ACCESS_COARSE_LOCATION.equals(permName) &&
++                        perms.contains(Manifest.permission.ACCESS_FINE_LOCATION) &&
++                        // DroidCC: check permission
++                        dcm.checkPermission(permName)) {
+                         return PackageManager.PERMISSION_GRANTED;
+                     }
+                 }
 diff --git a/services/java/com/android/server/SystemServer.java b/services/java/com/android/server/SystemServer.java
-index 7dd16d1..f07e81f 100644
+index 7dd16d1..d02e3c3 100644
 --- a/services/java/com/android/server/SystemServer.java
 +++ b/services/java/com/android/server/SystemServer.java
-@@ -429,6 +429,7 @@ public final class SystemServer {
-         MmsServiceBroker mmsService = null;
-         EntropyMixer entropyMixer = null;
-         CameraService cameraService = null;
-+        DroidCCService droidCCService = null;
- 
-         boolean disableStorage = SystemProperties.getBoolean("config.disable_storage", false);
-         boolean disableBluetooth = SystemProperties.getBoolean("config.disable_bluetooth", false);
-@@ -532,6 +533,15 @@ public final class SystemServer {
-             Slog.e("System", "************ Failure starting core service", e);
+@@ -361,6 +361,14 @@ public final class SystemServer {
+             mOnlyCore = true;
          }
  
 +        // Start DroidCC Service
 +        try {
 +            Slog.i(TAG, "DroidCC Service");
-+            droidCCService = new DroidCCService(context);
-+            ServiceManager.addService(Context.DROIDCC_SERVICE, droidCCService);
++            ServiceManager.addService(Context.DROIDCC_SERVICE, new DroidCCService(mSystemContext));
 +        } catch (Throwable e) {
 +            Slog.e(TAG, "Failure starting DroidCC Service", e);
 +        }
 +
-         StatusBarManagerService statusBar = null;
-         INotificationManager notification = null;
-         InputMethodManagerService imm = null;
+         // Start the package manager.
+         Slog.i(TAG, "Package Manager");
+         mPackageManagerService = PackageManagerService.main(mSystemContext, installer,
 -- 
 1.9.1
 
