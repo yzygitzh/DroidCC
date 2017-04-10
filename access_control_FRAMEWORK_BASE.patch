@@ -1,20 +1,20 @@
-From 96ca340771ae687d5780d28626a43ddc032c983d Mon Sep 17 00:00:00 2001
+From 717af32de8151ce0a0a656453875321602928c9b Mon Sep 17 00:00:00 2001
 From: Ziyue Yang <yzylivezh@hotmail.com>
-Date: Mon, 10 Apr 2017 18:47:28 +0800
+Date: Mon, 10 Apr 2017 20:26:21 +0800
 Subject: [PATCH] access control patch
 
 ---
  Android.mk                                         |  1 +
- api/current.txt                                    | 20 +++++++
- api/system-current.txt                             | 20 +++++++
- core/java/android/app/DroidCCManager.java          | 43 +++++++++++++++
- core/java/android/app/SystemServiceRegistry.java   | 10 ++++
+ api/current.txt                                    | 20 ++++++
+ api/system-current.txt                             | 20 ++++++
+ core/java/android/app/DroidCCManager.java          | 45 +++++++++++++
+ core/java/android/app/SystemServiceRegistry.java   | 10 +++
  core/java/android/content/Context.java             |  2 +
- core/java/android/os/IDroidCCService.aidl          | 13 +++++
- core/java/android/view/View.java                   | 40 ++++++++++++++
- .../java/com/android/server/DroidCCService.java    | 64 ++++++++++++++++++++++
- services/java/com/android/server/SystemServer.java |  8 +++
- 10 files changed, 221 insertions(+)
+ core/java/android/os/IDroidCCService.aidl          | 13 ++++
+ core/java/android/view/View.java                   | 40 ++++++++++++
+ .../java/com/android/server/DroidCCService.java    | 74 ++++++++++++++++++++++
+ services/java/com/android/server/SystemServer.java | 10 +++
+ 10 files changed, 235 insertions(+)
  create mode 100644 core/java/android/app/DroidCCManager.java
  create mode 100644 core/java/android/os/IDroidCCService.aidl
  create mode 100644 services/core/java/com/android/server/DroidCCService.java
@@ -137,10 +137,10 @@ index 3c88e59..d3e74c3 100644
      method public final int getWidth();
 diff --git a/core/java/android/app/DroidCCManager.java b/core/java/android/app/DroidCCManager.java
 new file mode 100644
-index 0000000..ce65d4c
+index 0000000..aaaa371
 --- /dev/null
 +++ b/core/java/android/app/DroidCCManager.java
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,45 @@
 +package android.app;
 +
 +import android.annotation.SdkConstant;
@@ -160,9 +160,11 @@ index 0000000..ce65d4c
 +
 +public class DroidCCManager {
 +    IDroidCCService mService;
++    Context mContext;
 +
 +    public DroidCCManager(Context ctx, IDroidCCService service) {
 +        mService = service;
++        mContext = ctx;
 +    }
 +
 +    public void setView(List<String> idxList, List<String> viewStrList) {
@@ -319,12 +321,14 @@ index dea004e..1e23539 100644
       *
 diff --git a/services/core/java/com/android/server/DroidCCService.java b/services/core/java/com/android/server/DroidCCService.java
 new file mode 100644
-index 0000000..082602d
+index 0000000..c43c142
 --- /dev/null
 +++ b/services/core/java/com/android/server/DroidCCService.java
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,74 @@
 +package com.android.server;
 +
++import android.app.ActivityManager;
++import android.content.Context;
 +import android.os.Binder;
 +import android.os.RemoteException;
 +import android.os.IDroidCCService;
@@ -338,68 +342,85 @@ index 0000000..082602d
 +import java.util.List;
 +
 +class ViewKey {
-+    int uid;
-+    String packageName;
 +    String activityName;
-+    String parentViewStr;
-+    String viewStr;
++    String idxListJoin;
 +
-+    public ViewKey(int _uid, String _packageName, String _activityName,
-+                   String _parentViewStr, String _viewStr) {
-+        uid = _uid;
-+        packageName = _packageName;
++    public ViewKey(String _activityName, String _idxListJoin) {
 +        activityName = _activityName;
-+        parentViewStr = _parentViewStr;
-+        viewStr = _viewStr;
++        idxListJoin = _idxListJoin;
++    }
++}
++
++class ViewInfo {
++    List<Integer> idxList;
++    List<String> viewStrList;
++
++    public ViewInfo(List<Integer> _idxList, List<String> _viewStrList) {
++        idxList = _idxList;
++        viewStrList = _viewStrList;
 +    }
 +}
 +
 +public class DroidCCService extends IDroidCCService.Stub {
++    private static Map<Integer, ViewKey> latestViewMap = new HashMap<>();
++    private static Map<ViewKey, ViewInfo> viewInfoMap = new HashMap<>();
 +    private static Map<ViewKey, Map<String, Boolean>> viewPermMap = new HashMap<>();
++    Context mContext;
 +
-+    public DroidCCService() {
-+
++    public DroidCCService(Context context) {
++        mContext = context;
++        Log.d("DroidCCService: ", "START");
 +    }
 +
-+    private ViewKey genViewKey(List<String> idxList, List<String> viewStrList) {
-+        int callingUid = Binder.getCallingUid();
-+        Log.d("DroidCCService: ", "START GEN VIEW KEY");
-+
-+        for (int i = 0; i < idxList.size(); i++) {
-+            Log.d("DroidCCService: idx: ", idxList.get(i));
-+            Log.d("DroidCCService: viewStr: ", viewStrList.get(i));
++    private ViewKey genViewKey(List<String> idxList) {
++        String idxListJoin = "";
++        for (String idx: idxList) {
++            idxListJoin += idx;
 +        }
 +
-+        Log.d("DroidCCService: callingUid: ", Integer.toString(callingUid));
-+        Log.d("DroidCCService: ", "END GEN VIEW KEY");
-+        return new ViewKey(callingUid, "", "", "", "");
++        ActivityManager am = (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
++        List<ActivityManager.RunningTaskInfo> taskInfo = am.getRunningTasks(1);
++        String topActivityName = taskInfo.get(0).topActivity.getClassName();
++        Log.d("DroidCCService: topActivity: ", topActivityName);
++
++        return new ViewKey(topActivityName, idxListJoin);
 +    }
 +
 +    @Override
 +    public void setView(List<String> idxList, List<String> viewStrList) throws RemoteException {
-+        ViewKey k = genViewKey(idxList, viewStrList);
++        int callingUid = Binder.getCallingUid();
++        ViewKey k = genViewKey(idxList);
 +        viewPermMap.put(k, new HashMap<String, Boolean>());
 +    }
 +
 +    @Override
 +    public Map getPermTable(List<String> idxList, List<String> viewStrList) throws RemoteException {
-+        ViewKey k = genViewKey(idxList, viewStrList);
++        ViewKey k = genViewKey(idxList);
 +        return viewPermMap.get(k);
 +    }
 +}
 \ No newline at end of file
 diff --git a/services/java/com/android/server/SystemServer.java b/services/java/com/android/server/SystemServer.java
-index 7dd16d1..a0887af 100644
+index 7dd16d1..f07e81f 100644
 --- a/services/java/com/android/server/SystemServer.java
 +++ b/services/java/com/android/server/SystemServer.java
-@@ -532,6 +532,14 @@ public final class SystemServer {
+@@ -429,6 +429,7 @@ public final class SystemServer {
+         MmsServiceBroker mmsService = null;
+         EntropyMixer entropyMixer = null;
+         CameraService cameraService = null;
++        DroidCCService droidCCService = null;
+ 
+         boolean disableStorage = SystemProperties.getBoolean("config.disable_storage", false);
+         boolean disableBluetooth = SystemProperties.getBoolean("config.disable_bluetooth", false);
+@@ -532,6 +533,15 @@ public final class SystemServer {
              Slog.e("System", "************ Failure starting core service", e);
          }
  
 +        // Start DroidCC Service
 +        try {
 +            Slog.i(TAG, "DroidCC Service");
-+            ServiceManager.addService(Context.DROIDCC_SERVICE, new DroidCCService());
++            droidCCService = new DroidCCService(context);
++            ServiceManager.addService(Context.DROIDCC_SERVICE, droidCCService);
 +        } catch (Throwable e) {
 +            Slog.e(TAG, "Failure starting DroidCC Service", e);
 +        }
