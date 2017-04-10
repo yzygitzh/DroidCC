@@ -1,21 +1,21 @@
-From 3d28633799b1e1f05fb7bbb7e4a3df3f64a726dc Mon Sep 17 00:00:00 2001
+From 5b9e3a16cfbb4b2b7b333656974009aa50199d8d Mon Sep 17 00:00:00 2001
 From: Ziyue Yang <yzylivezh@hotmail.com>
-Date: Mon, 10 Apr 2017 21:44:46 +0800
+Date: Mon, 10 Apr 2017 23:04:52 +0800
 Subject: [PATCH] access control patch
 
 ---
  Android.mk                                         |  1 +
  api/current.txt                                    | 20 ++++++
  api/system-current.txt                             | 20 ++++++
- core/java/android/app/DroidCCManager.java          | 45 +++++++++++++
+ core/java/android/app/DroidCCManager.java          | 45 ++++++++++++
  core/java/android/app/SystemServiceRegistry.java   | 10 +++
  core/java/android/content/Context.java             |  2 +
  core/java/android/os/IDroidCCService.aidl          | 13 ++++
- core/java/android/view/View.java                   | 40 ++++++++++++
- .../java/com/android/server/DroidCCService.java    | 73 ++++++++++++++++++++++
- .../android/server/pm/PackageManagerService.java   | 35 ++++++++---
+ core/java/android/view/View.java                   | 40 +++++++++++
+ .../java/com/android/server/DroidCCService.java    | 83 ++++++++++++++++++++++
+ .../android/server/pm/PackageManagerService.java   | 35 ++++++---
  services/java/com/android/server/SystemServer.java |  8 +++
- 11 files changed, 258 insertions(+), 9 deletions(-)
+ 11 files changed, 268 insertions(+), 9 deletions(-)
  create mode 100644 core/java/android/app/DroidCCManager.java
  create mode 100644 core/java/android/os/IDroidCCService.aidl
  create mode 100644 services/core/java/com/android/server/DroidCCService.java
@@ -33,7 +33,7 @@ index 99e0c46..9a73dd4 100644
  	core/java/android/os/IMessenger.aidl \
  	core/java/android/os/INetworkActivityListener.aidl \
 diff --git a/api/current.txt b/api/current.txt
-index d7fdb2d..2449e6a 100644
+index d7fdb2d..4db99a4 100644
 --- a/api/current.txt
 +++ b/api/current.txt
 @@ -4187,6 +4187,12 @@ package android.app {
@@ -42,7 +42,7 @@ index d7fdb2d..2449e6a 100644
  
 +  public class DroidCCManager {
 +    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
-+    method public boolean checkPermission(java.lang.String);
++    method public boolean checkPermission(java.lang.String, int);
 +    method public void setView(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +  }
 +
@@ -62,7 +62,7 @@ index d7fdb2d..2449e6a 100644
    }
  
 +  public abstract interface IDroidCCService implements android.os.IInterface {
-+    method public abstract boolean checkPermission(java.lang.String) throws android.os.RemoteException;
++    method public abstract boolean checkPermission(java.lang.String, int) throws android.os.RemoteException;
 +    method public abstract void setView(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +  }
 +
@@ -85,7 +85,7 @@ index d7fdb2d..2449e6a 100644
      method public int getVisibility();
      method public final int getWidth();
 diff --git a/api/system-current.txt b/api/system-current.txt
-index 3c88e59..64dddbf 100644
+index 3c88e59..40ac73f 100644
 --- a/api/system-current.txt
 +++ b/api/system-current.txt
 @@ -4304,6 +4304,12 @@ package android.app {
@@ -94,7 +94,7 @@ index 3c88e59..64dddbf 100644
  
 +  public class DroidCCManager {
 +    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
-+    method public boolean checkPermission(java.lang.String);
++    method public boolean checkPermission(java.lang.String, int);
 +    method public void setView(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +  }
 +
@@ -114,7 +114,7 @@ index 3c88e59..64dddbf 100644
    }
  
 +  public abstract interface IDroidCCService implements android.os.IInterface {
-+    method public abstract boolean checkPermission(java.lang.String) throws android.os.RemoteException;
++    method public abstract boolean checkPermission(java.lang.String, int) throws android.os.RemoteException;
 +    method public abstract void setView(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +  }
 +
@@ -138,7 +138,7 @@ index 3c88e59..64dddbf 100644
      method public final int getWidth();
 diff --git a/core/java/android/app/DroidCCManager.java b/core/java/android/app/DroidCCManager.java
 new file mode 100644
-index 0000000..8bce82e
+index 0000000..e7ef4be
 --- /dev/null
 +++ b/core/java/android/app/DroidCCManager.java
 @@ -0,0 +1,45 @@
@@ -177,9 +177,9 @@ index 0000000..8bce82e
 +        }
 +    }
 +
-+    public boolean checkPermission(String permission){
++    public boolean checkPermission(String permission, int uid){
 +        try {
-+            return mService.checkPermission(permission);
++            return mService.checkPermission(permission, uid);
 +        } catch(Exception e) {
 +            Log.e("DroidCCManager", e.toString());
 +            e.printStackTrace();
@@ -231,7 +231,7 @@ index 758b6ff..ec2288e 100644
       * process and user ID running in the system.
 diff --git a/core/java/android/os/IDroidCCService.aidl b/core/java/android/os/IDroidCCService.aidl
 new file mode 100644
-index 0000000..c8a0226
+index 0000000..02c9176
 --- /dev/null
 +++ b/core/java/android/os/IDroidCCService.aidl
 @@ -0,0 +1,13 @@
@@ -246,7 +246,7 @@ index 0000000..c8a0226
 +     * and return values in AIDL.
 +     */
 +    void setView(in List<String> idxList, in List<String> viewStrList);
-+    boolean checkPermission(String permission);
++    boolean checkPermission(String permission, int uid);
 +}
 diff --git a/core/java/android/view/View.java b/core/java/android/view/View.java
 index dea004e..1e23539 100644
@@ -322,10 +322,10 @@ index dea004e..1e23539 100644
       *
 diff --git a/services/core/java/com/android/server/DroidCCService.java b/services/core/java/com/android/server/DroidCCService.java
 new file mode 100644
-index 0000000..501e9ac
+index 0000000..571e914
 --- /dev/null
 +++ b/services/core/java/com/android/server/DroidCCService.java
-@@ -0,0 +1,73 @@
+@@ -0,0 +1,83 @@
 +package com.android.server;
 +
 +import android.app.ActivityManager;
@@ -343,30 +343,34 @@ index 0000000..501e9ac
 +import java.util.List;
 +
 +class ViewKey {
-+    String activityName;
-+    String idxListJoin;
++    int mUid;
++    String mActivityName;
++    String mPackageName;
++    String mIdxListJoin;
 +
-+    public ViewKey(String _activityName, String _idxListJoin) {
-+        activityName = _activityName;
-+        idxListJoin = _idxListJoin;
++    public ViewKey(int uid, String activityName, String packageName, String idxListJoin) {
++        mUid = uid;
++        mActivityName = activityName;
++        mPackageName = packageName;
++        mIdxListJoin = idxListJoin;
 +    }
 +}
 +
 +class ViewInfo {
-+    List<Integer> idxList;
-+    List<String> viewStrList;
++    List<Integer> mIdxList;
++    List<String> mViewStrList;
 +
-+    public ViewInfo(List<Integer> _idxList, List<String> _viewStrList) {
-+        idxList = _idxList;
-+        viewStrList = _viewStrList;
++    public ViewInfo(List<Integer> idxList, List<String> viewStrList) {
++        mIdxList = idxList;
++        mViewStrList = viewStrList;
 +    }
 +}
 +
 +public class DroidCCService extends IDroidCCService.Stub {
-+    private static Map<Integer, ViewKey> latestViewMap = new HashMap<>();
-+    private static Map<ViewKey, ViewInfo> viewInfoMap = new HashMap<>();
-+    private static Map<ViewKey, Map<String, Boolean>> viewPermMap = new HashMap<>();
-+    ViewKey currView;
++    private static Map<Integer, ViewKey> mLatestViewMap = new HashMap<>();
++    private static Map<ViewKey, ViewInfo> mViewInfoMap = new HashMap<>();
++    private static Map<ViewKey, Map<String, Boolean>> mViewPermMap = new HashMap<>();
++    ViewKey mCurrView;
 +    Context mContext;
 +
 +    public DroidCCService(Context context) {
@@ -374,6 +378,8 @@ index 0000000..501e9ac
 +    }
 +
 +    private ViewKey genViewKey(List<String> idxList) {
++        int callingUid = Binder.getCallingUid();
++
 +        String idxListJoin = "";
 +        for (String idx: idxList) {
 +            idxListJoin += idx;
@@ -382,26 +388,30 @@ index 0000000..501e9ac
 +        ActivityManager am = (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
 +        List<ActivityManager.RunningTaskInfo> taskInfo = am.getRunningTasks(1);
 +        String topActivityName = taskInfo.get(0).topActivity.getClassName();
++        String packageName = taskInfo.get(0).topActivity.getPackageName();
 +
-+        return new ViewKey(topActivityName, idxListJoin);
++        Log.d("DroidCCService: topActivity: ", topActivityName);
++        Log.d("DroidCCService: packageName: ", packageName);
++
++        return new ViewKey(callingUid, topActivityName, packageName, idxListJoin);
 +    }
 +
 +    @Override
 +    public void setView(List<String> idxList, List<String> viewStrList) throws RemoteException {
-+        int callingUid = Binder.getCallingUid();
-+        currView = genViewKey(idxList);
-+        viewPermMap.put(currView, new HashMap<String, Boolean>());
++        mCurrView = genViewKey(idxList);
++        mViewPermMap.put(mCurrView, new HashMap<String, Boolean>());
 +    }
 +
 +    @Override
-+    public boolean checkPermission(String permission) throws RemoteException {
++    public boolean checkPermission(String permission, int uid) throws RemoteException {
 +        Log.d("DroidCCService: checking permission: ", permission);
++        Log.d("DroidCCService: uid: ", Integer.toString(uid));
 +        return true;
 +    }
 +}
 \ No newline at end of file
 diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
-index 7654cc9..153c96e 100644
+index 7654cc9..2b52e4b 100644
 --- a/services/core/java/com/android/server/pm/PackageManagerService.java
 +++ b/services/core/java/com/android/server/pm/PackageManagerService.java
 @@ -87,6 +87,7 @@ import android.Manifest;
@@ -425,7 +435,7 @@ index 7654cc9..153c96e 100644
 -                if (permissionsState.hasPermission(permName, userId)) {
 +                if (permissionsState.hasPermission(permName, userId) &&
 +                    // DroidCC: check permission
-+                    dcm.checkPermission(permName)) {
++                    dcm.checkPermission(permName, userId)) {
                      return PackageManager.PERMISSION_GRANTED;
                  }
                  // Special case: ACCESS_FINE_LOCATION permission includes ACCESS_COARSE_LOCATION
@@ -434,7 +444,7 @@ index 7654cc9..153c96e 100644
 +                if (Manifest.permission.ACCESS_COARSE_LOCATION.equals(permName) &&
 +                    permissionsState.hasPermission(Manifest.permission.ACCESS_FINE_LOCATION, userId) &&
 +                    // DroidCC: check permission
-+                    dcm.checkPermission(permName)) {
++                    dcm.checkPermission(permName, userId)) {
                      return PackageManager.PERMISSION_GRANTED;
                  }
              }
@@ -450,7 +460,7 @@ index 7654cc9..153c96e 100644
 -                if (permissionsState.hasPermission(permName, userId)) {
 +                if (permissionsState.hasPermission(permName, userId) &&
 +                    // DroidCC: check permission
-+                    dcm.checkPermission(permName)) {
++                    dcm.checkPermission(permName, uid)) {
                      return PackageManager.PERMISSION_GRANTED;
                  }
                  // Special case: ACCESS_FINE_LOCATION permission includes ACCESS_COARSE_LOCATION
@@ -459,7 +469,7 @@ index 7654cc9..153c96e 100644
 +                if (Manifest.permission.ACCESS_COARSE_LOCATION.equals(permName) &&
 +                    permissionsState.hasPermission(Manifest.permission.ACCESS_FINE_LOCATION, userId) &&
 +                    // DroidCC: check permission
-+                    dcm.checkPermission(permName)) {
++                    dcm.checkPermission(permName, uid)) {
                      return PackageManager.PERMISSION_GRANTED;
                  }
              } else {
@@ -468,7 +478,7 @@ index 7654cc9..153c96e 100644
 -                    if (perms.contains(permName)) {
 +                    if (perms.contains(permName) &&
 +                        // DroidCC: check permission
-+                        dcm.checkPermission(permName)) {
++                        dcm.checkPermission(permName, uid)) {
                          return PackageManager.PERMISSION_GRANTED;
                      }
 -                    if (Manifest.permission.ACCESS_COARSE_LOCATION.equals(permName) && perms
@@ -476,7 +486,7 @@ index 7654cc9..153c96e 100644
 +                    if (Manifest.permission.ACCESS_COARSE_LOCATION.equals(permName) &&
 +                        perms.contains(Manifest.permission.ACCESS_FINE_LOCATION) &&
 +                        // DroidCC: check permission
-+                        dcm.checkPermission(permName)) {
++                        dcm.checkPermission(permName, uid)) {
                          return PackageManager.PERMISSION_GRANTED;
                      }
                  }
