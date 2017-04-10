@@ -1,0 +1,391 @@
+From d37c746706a7b0ded820fc49980a99b70898cef5 Mon Sep 17 00:00:00 2001
+From: Ziyue Yang <yzylivezh@hotmail.com>
+Date: Mon, 10 Apr 2017 11:15:42 +0800
+Subject: [PATCH] access control patch
+
+---
+ Android.mk                                         |  1 +
+ api/current.txt                                    | 25 ++++++++
+ api/system-current.txt                             | 25 ++++++++
+ core/java/android/app/DroidCCManager.java          | 71 ++++++++++++++++++++++
+ core/java/android/app/SystemServiceRegistry.java   | 10 +++
+ core/java/android/content/Context.java             |  2 +
+ core/java/android/os/IDroidCCService.aidl          | 16 +++++
+ core/java/android/view/View.java                   | 14 +++++
+ .../java/com/android/server/DroidCCService.java    | 50 +++++++++++++++
+ services/java/com/android/server/SystemServer.java |  7 +++
+ 10 files changed, 221 insertions(+)
+ create mode 100644 core/java/android/app/DroidCCManager.java
+ create mode 100644 core/java/android/os/IDroidCCService.aidl
+ create mode 100644 services/core/java/com/android/server/DroidCCService.java
+
+diff --git a/Android.mk b/Android.mk
+index 99e0c46..9a73dd4 100644
+--- a/Android.mk
++++ b/Android.mk
+@@ -206,6 +206,7 @@ LOCAL_SRC_FILES += \
+ 	core/java/android/os/IBatteryPropertiesListener.aidl \
+ 	core/java/android/os/IBatteryPropertiesRegistrar.aidl \
+ 	core/java/android/os/ICancellationSignal.aidl \
++	core/java/android/os/IDroidCCService.aidl \
+ 	core/java/android/os/IDeviceIdleController.aidl \
+ 	core/java/android/os/IMessenger.aidl \
+ 	core/java/android/os/INetworkActivityListener.aidl \
+diff --git a/api/current.txt b/api/current.txt
+index d7fdb2d..40de645 100644
+--- a/api/current.txt
++++ b/api/current.txt
+@@ -4187,6 +4187,15 @@ package android.app {
+     field public static final int VISIBILITY_VISIBLE_NOTIFY_ONLY_COMPLETION = 3; // 0x3
+   }
+ 
++  public class DroidCCManager {
++    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
++    method public void appendLog(java.lang.String);
++    method public void clearLog();
++    method public java.lang.String getUidView(int);
++    method public java.lang.String readLog();
++    method public void setUidView(int, java.lang.String);
++  }
++
+   public class ExpandableListActivity extends android.app.Activity implements android.widget.ExpandableListView.OnChildClickListener android.widget.ExpandableListView.OnGroupCollapseListener android.widget.ExpandableListView.OnGroupExpandListener android.view.View.OnCreateContextMenuListener {
+     ctor public ExpandableListActivity();
+     method public android.widget.ExpandableListAdapter getExpandableListAdapter();
+@@ -7745,6 +7754,7 @@ package android.content {
+     field public static final java.lang.String DEVICE_POLICY_SERVICE = "device_policy";
+     field public static final java.lang.String DISPLAY_SERVICE = "display";
+     field public static final java.lang.String DOWNLOAD_SERVICE = "download";
++    field public static final java.lang.String DROIDCC_SERVICE = "droid_cc";
+     field public static final java.lang.String DROPBOX_SERVICE = "dropbox";
+     field public static final java.lang.String FINGERPRINT_SERVICE = "fingerprint";
+     field public static final java.lang.String INPUT_METHOD_SERVICE = "input_method";
+@@ -23084,6 +23094,21 @@ package android.os {
+     method public abstract void binderDied();
+   }
+ 
++  public abstract interface IDroidCCService implements android.os.IInterface {
++    method public abstract void appendLog(java.lang.String) throws android.os.RemoteException;
++    method public abstract void clearLog() throws android.os.RemoteException;
++    method public abstract java.lang.String getUidView(int) throws android.os.RemoteException;
++    method public abstract java.lang.String readLog() throws android.os.RemoteException;
++    method public abstract void setUidView(int, java.lang.String) throws android.os.RemoteException;
++  }
++
++  public static abstract class IDroidCCService.Stub extends android.os.Binder implements android.os.IDroidCCService {
++    ctor public IDroidCCService.Stub();
++    method public android.os.IBinder asBinder();
++    method public static android.os.IDroidCCService asInterface(android.os.IBinder);
++    method public boolean onTransact(int, android.os.Parcel, android.os.Parcel, int) throws android.os.RemoteException;
++  }
++
+   public abstract interface IInterface {
+     method public abstract android.os.IBinder asBinder();
+   }
+diff --git a/api/system-current.txt b/api/system-current.txt
+index 3c88e59..db34ee9 100644
+--- a/api/system-current.txt
++++ b/api/system-current.txt
+@@ -4304,6 +4304,15 @@ package android.app {
+     field public static final int VISIBILITY_VISIBLE_NOTIFY_ONLY_COMPLETION = 3; // 0x3
+   }
+ 
++  public class DroidCCManager {
++    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
++    method public void appendLog(java.lang.String);
++    method public void clearLog();
++    method public java.lang.String getUidView(int);
++    method public java.lang.String readLog();
++    method public void setUidView(int, java.lang.String);
++  }
++
+   public class ExpandableListActivity extends android.app.Activity implements android.widget.ExpandableListView.OnChildClickListener android.widget.ExpandableListView.OnGroupCollapseListener android.widget.ExpandableListView.OnGroupExpandListener android.view.View.OnCreateContextMenuListener {
+     ctor public ExpandableListActivity();
+     method public android.widget.ExpandableListAdapter getExpandableListAdapter();
+@@ -7989,6 +7998,7 @@ package android.content {
+     field public static final java.lang.String DEVICE_POLICY_SERVICE = "device_policy";
+     field public static final java.lang.String DISPLAY_SERVICE = "display";
+     field public static final java.lang.String DOWNLOAD_SERVICE = "download";
++    field public static final java.lang.String DROIDCC_SERVICE = "droid_cc";
+     field public static final java.lang.String DROPBOX_SERVICE = "dropbox";
+     field public static final java.lang.String FINGERPRINT_SERVICE = "fingerprint";
+     field public static final java.lang.String HDMI_CONTROL_SERVICE = "hdmi_control";
+@@ -25028,6 +25038,21 @@ package android.os {
+     method public abstract void binderDied();
+   }
+ 
++  public abstract interface IDroidCCService implements android.os.IInterface {
++    method public abstract void appendLog(java.lang.String) throws android.os.RemoteException;
++    method public abstract void clearLog() throws android.os.RemoteException;
++    method public abstract java.lang.String getUidView(int) throws android.os.RemoteException;
++    method public abstract java.lang.String readLog() throws android.os.RemoteException;
++    method public abstract void setUidView(int, java.lang.String) throws android.os.RemoteException;
++  }
++
++  public static abstract class IDroidCCService.Stub extends android.os.Binder implements android.os.IDroidCCService {
++    ctor public IDroidCCService.Stub();
++    method public android.os.IBinder asBinder();
++    method public static android.os.IDroidCCService asInterface(android.os.IBinder);
++    method public boolean onTransact(int, android.os.Parcel, android.os.Parcel, int) throws android.os.RemoteException;
++  }
++
+   public abstract interface IInterface {
+     method public abstract android.os.IBinder asBinder();
+   }
+diff --git a/core/java/android/app/DroidCCManager.java b/core/java/android/app/DroidCCManager.java
+new file mode 100644
+index 0000000..b7de902
+--- /dev/null
++++ b/core/java/android/app/DroidCCManager.java
+@@ -0,0 +1,71 @@
++package android.app;
++
++/**
++ * Created by liam on 16/10/2.
++ */
++import android.annotation.SdkConstant;
++import android.annotation.SystemApi;
++import android.content.Context;
++import android.content.Intent;
++import android.os.Build;
++import android.os.Parcel;
++import android.os.Parcelable;
++import android.os.RemoteException;
++import android.os.IDroidCCService;
++import android.util.Log;
++import android.view.View;
++
++public class DroidCCManager {
++    IDroidCCService mService;
++
++    public DroidCCManager(Context ctx, IDroidCCService service) {
++        mService = service;
++    }
++
++    public void setUidView(int uid, String viewStr) {
++        try {
++            mService.setUidView(uid, viewStr);
++        } catch (Exception e) {
++            Log.e("DroidCCManager", e.toString());
++            e.printStackTrace();
++        }
++    }
++
++    public String getUidView(int uid) {
++        try {
++            return mService.getUidView(uid);
++        } catch(Exception e) {
++            Log.e("DroidCCManager", e.toString());
++            e.printStackTrace();
++        }
++        return null;
++    }
++
++    public void appendLog(String log) {
++        try {
++            mService.appendLog(log);
++        } catch(Exception e) {
++            Log.e("DroidCCManager", e.toString());
++            e.printStackTrace();
++        }
++    }
++
++    public void clearLog() {
++        try{
++            mService.clearLog();
++        } catch(Exception e) {
++            Log.e("DroidCCManager", e.toString());
++            e.printStackTrace();
++        }
++    }
++
++    public String readLog() {
++        try {
++            return mService.readLog();
++        } catch(Exception e) {
++            Log.e("DroidCCManager", e.toString());
++            e.printStackTrace();
++        }
++        return null;
++    }
++}
+\ No newline at end of file
+diff --git a/core/java/android/app/SystemServiceRegistry.java b/core/java/android/app/SystemServiceRegistry.java
+index 3d264c6..16e36c6 100644
+--- a/core/java/android/app/SystemServiceRegistry.java
++++ b/core/java/android/app/SystemServiceRegistry.java
+@@ -86,6 +86,7 @@ import android.nfc.NfcManager;
+ import android.os.BatteryManager;
+ import android.os.DropBoxManager;
+ import android.os.IBinder;
++import android.os.IDroidCCService;
+ import android.os.IPowerManager;
+ import android.os.IUserManager;
+ import android.os.PowerManager;
+@@ -704,6 +705,15 @@ final class SystemServiceRegistry {
+             public RadioManager createService(ContextImpl ctx) {
+                 return new RadioManager(ctx);
+             }});
++
++        registerService(Context.DROIDCC_SERVICE, DroidCCManager.class,
++            new CachedServiceFetcher<DroidCCManager>() {
++            @Override
++            public DroidCCManager createService(ContextImpl ctx) {
++                IBinder b = ServiceManager.getService(Context.DROIDCC_SERVICE);
++                IDroidCCService service = IDroidCCService.Stub.asInterface(b);
++                return new DroidCCManager(ctx, service);
++            }});
+     }
+ 
+     /**
+diff --git a/core/java/android/content/Context.java b/core/java/android/content/Context.java
+index 758b6ff..ec2288e 100644
+--- a/core/java/android/content/Context.java
++++ b/core/java/android/content/Context.java
+@@ -3374,6 +3374,8 @@ public abstract class Context {
+      */
+     public static final String RADIO_SERVICE = "radio";
+ 
++    public static final String DROIDCC_SERVICE="droid_cc";
++
+     /**
+      * Determine whether the given permission is allowed for a particular
+      * process and user ID running in the system.
+diff --git a/core/java/android/os/IDroidCCService.aidl b/core/java/android/os/IDroidCCService.aidl
+new file mode 100644
+index 0000000..38ecdb3
+--- /dev/null
++++ b/core/java/android/os/IDroidCCService.aidl
+@@ -0,0 +1,16 @@
++// IDroidCCService.aidl
++package android.os;
++
++// Declare any non-default types here with import statements
++
++interface IDroidCCService {
++    /**
++     * Demonstrates some basic types that you can use as parameters
++     * and return values in AIDL.
++     */
++    void setUidView(int uid, String viewStr);
++    String getUidView(int uid);
++    void appendLog(String log);
++    void clearLog();
++    String readLog();
++}
+diff --git a/core/java/android/view/View.java b/core/java/android/view/View.java
+index dea004e..22fb85a 100644
+--- a/core/java/android/view/View.java
++++ b/core/java/android/view/View.java
+@@ -29,6 +29,7 @@ import android.annotation.NonNull;
+ import android.annotation.Nullable;
+ import android.annotation.Size;
+ import android.annotation.UiThread;
++import android.app.DroidCCManager;
+ import android.content.ClipData;
+ import android.content.Context;
+ import android.content.ContextWrapper;
+@@ -62,6 +63,7 @@ import android.os.Handler;
+ import android.os.IBinder;
+ import android.os.Parcel;
+ import android.os.Parcelable;
++import android.os.Process;
+ import android.os.RemoteException;
+ import android.os.SystemClock;
+ import android.os.SystemProperties;
+@@ -9276,6 +9278,18 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
+             event.setTargetAccessibilityFocus(false);
+         }
+ 
++        // Pass the view info to DroidCC system service
++        try {
++            int viewUid = Process.myUid();
++            DroidCCManager dcm = (DroidCCManager) mContext.getSystemService("droid_cc");
++            dcm.setUidView(viewUid, this.toString());
++            String retViewStr = dcm.getUidView(viewUid);
++            Log.d("View: DroidCC: " + viewUid + ": ", retViewStr);
++        } catch (Exception e) {
++            Log.e("View: DroidCC: ", e.toString());
++            e.printStackTrace();
++        }
++
+         boolean result = false;
+ 
+         if (mInputEventConsistencyVerifier != null) {
+diff --git a/services/core/java/com/android/server/DroidCCService.java b/services/core/java/com/android/server/DroidCCService.java
+new file mode 100644
+index 0000000..5f875fc
+--- /dev/null
++++ b/services/core/java/com/android/server/DroidCCService.java
+@@ -0,0 +1,50 @@
++package com.android.server;
++
++import java.io.InputStreamReader;
++import java.io.LineNumberReader;
++import java.lang.*;
++import java.util.HashMap;
++import android.os.RemoteException;
++import android.os.IDroidCCService;
++import android.view.View;
++
++
++/**
++ *
++ * Created by zhuangqianliu on 2016/9/21.
++ */
++
++public class DroidCCService extends IDroidCCService.Stub {
++    private static HashMap<Integer, String> uidViewMap = new HashMap<>();
++    private static String inner_log = "";
++
++    public DroidCCService() {
++
++    }
++
++    @Override
++    public void setUidView(int uid, String viewStr) throws RemoteException {
++        uidViewMap.put(uid, viewStr);
++    }
++
++    @Override
++    public String getUidView(int uid) throws RemoteException {
++        return uidViewMap.get(uid);
++    }
++
++    @Override
++    public void appendLog(String log) throws RemoteException {
++        inner_log += log+"\n";
++    }
++
++    @Override
++    public void clearLog() throws RemoteException {
++        inner_log = "";
++    }
++
++    @Override
++    public String readLog() throws RemoteException {
++        return inner_log;
++    }
++
++}
+\ No newline at end of file
+diff --git a/services/java/com/android/server/SystemServer.java b/services/java/com/android/server/SystemServer.java
+index 7dd16d1..fc1c88c 100644
+--- a/services/java/com/android/server/SystemServer.java
++++ b/services/java/com/android/server/SystemServer.java
+@@ -440,6 +440,13 @@ public final class SystemServer {
+         boolean isEmulator = SystemProperties.get("ro.kernel.qemu").equals("1");
+ 
+         try {
++            Slog.i(TAG, "DroidCC Service");
++            ServiceManager.addService(Context.DROIDCC_SERVICE, new DroidCCService());
++        } catch (Throwable e) {
++            Slog.e(TAG, "Failure starting DroidCC Service", e);
++        }
++
++        try {
+             Slog.i(TAG, "Reading configuration...");
+             SystemConfig.getInstance();
+ 
+-- 
+1.9.1
+

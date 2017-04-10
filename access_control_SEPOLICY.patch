@@ -1,0 +1,34 @@
+From c231673229fd78e67299023b0df839f535451bf8 Mon Sep 17 00:00:00 2001
+From: Ziyue Yang <yzylivezh@hotmail.com>
+Date: Mon, 10 Apr 2017 11:15:42 +0800
+Subject: [PATCH] access control patch
+
+---
+ service.te       | 1 +
+ service_contexts | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/service.te b/service.te
+index 56478d0..567c525 100644
+--- a/service.te
++++ b/service.te
+@@ -102,3 +102,4 @@ type wifip2p_service, app_api_service, system_server_service, service_manager_ty
+ type wifiscanner_service, system_api_service, system_server_service, service_manager_type;
+ type wifi_service, app_api_service, system_server_service, service_manager_type;
+ type window_service, system_api_service, system_server_service, service_manager_type;
++type droid_cc_service, system_api_service, system_server_service, service_manager_type;
+diff --git a/service_contexts b/service_contexts
+index 85dcd3d..92df5da 100644
+--- a/service_contexts
++++ b/service_contexts
+@@ -16,6 +16,7 @@ battery                                   u:object_r:battery_service:s0
+ bluetooth_manager                         u:object_r:bluetooth_manager_service:s0
+ bluetooth                                 u:object_r:bluetooth_service:s0
+ carrier_config                            u:object_r:radio_service:s0
++droid_cc                                  u:object_r:droid_cc_service:s0
+ clipboard                                 u:object_r:clipboard_service:s0
+ com.android.net.IProxyService             u:object_r:IProxyService_service:s0
+ commontime_management                     u:object_r:commontime_management_service:s0
+-- 
+1.9.1
+
