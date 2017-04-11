@@ -1,21 +1,21 @@
-From 5b9e3a16cfbb4b2b7b333656974009aa50199d8d Mon Sep 17 00:00:00 2001
+From 398e7b2b32278b93f0937b959e3ee0e3456958f3 Mon Sep 17 00:00:00 2001
 From: Ziyue Yang <yzylivezh@hotmail.com>
-Date: Mon, 10 Apr 2017 23:04:52 +0800
+Date: Tue, 11 Apr 2017 20:09:44 +0800
 Subject: [PATCH] access control patch
 
 ---
- Android.mk                                         |  1 +
- api/current.txt                                    | 20 ++++++
- api/system-current.txt                             | 20 ++++++
- core/java/android/app/DroidCCManager.java          | 45 ++++++++++++
- core/java/android/app/SystemServiceRegistry.java   | 10 +++
- core/java/android/content/Context.java             |  2 +
- core/java/android/os/IDroidCCService.aidl          | 13 ++++
- core/java/android/view/View.java                   | 40 +++++++++++
- .../java/com/android/server/DroidCCService.java    | 83 ++++++++++++++++++++++
- .../android/server/pm/PackageManagerService.java   | 35 ++++++---
- services/java/com/android/server/SystemServer.java |  8 +++
- 11 files changed, 268 insertions(+), 9 deletions(-)
+ Android.mk                                         |   1 +
+ api/current.txt                                    |  20 +++
+ api/system-current.txt                             |  20 +++
+ core/java/android/app/DroidCCManager.java          |  45 ++++++
+ core/java/android/app/SystemServiceRegistry.java   |  10 ++
+ core/java/android/content/Context.java             |   2 +
+ core/java/android/os/IDroidCCService.aidl          |  13 ++
+ core/java/android/view/View.java                   |  40 +++++
+ .../java/com/android/server/DroidCCService.java    | 180 +++++++++++++++++++++
+ .../android/server/pm/PackageManagerService.java   |  35 ++--
+ services/java/com/android/server/SystemServer.java |   8 +
+ 11 files changed, 365 insertions(+), 9 deletions(-)
  create mode 100644 core/java/android/app/DroidCCManager.java
  create mode 100644 core/java/android/os/IDroidCCService.aidl
  create mode 100644 services/core/java/com/android/server/DroidCCService.java
@@ -322,14 +322,15 @@ index dea004e..1e23539 100644
       *
 diff --git a/services/core/java/com/android/server/DroidCCService.java b/services/core/java/com/android/server/DroidCCService.java
 new file mode 100644
-index 0000000..571e914
+index 0000000..ea11e05
 --- /dev/null
 +++ b/services/core/java/com/android/server/DroidCCService.java
-@@ -0,0 +1,83 @@
+@@ -0,0 +1,180 @@
 +package com.android.server;
 +
 +import android.app.ActivityManager;
 +import android.content.Context;
++import android.content.pm.PackageManager;
 +import android.os.Binder;
 +import android.os.RemoteException;
 +import android.os.IDroidCCService;
@@ -341,18 +342,21 @@ index 0000000..571e914
 +import java.util.HashMap;
 +import java.util.Map;
 +import java.util.List;
++import java.util.ArrayList;
 +
 +class ViewKey {
-+    int mUid;
 +    String mActivityName;
 +    String mPackageName;
 +    String mIdxListJoin;
 +
-+    public ViewKey(int uid, String activityName, String packageName, String idxListJoin) {
-+        mUid = uid;
++    public ViewKey(String activityName, String packageName, String idxListJoin) {
 +        mActivityName = activityName;
 +        mPackageName = packageName;
 +        mIdxListJoin = idxListJoin;
++    }
++
++    public String toString() {
++        return mActivityName + ";" + mPackageName + ";" + mIdxListJoin;
 +    }
 +}
 +
@@ -367,9 +371,11 @@ index 0000000..571e914
 +}
 +
 +public class DroidCCService extends IDroidCCService.Stub {
-+    private static Map<Integer, ViewKey> mLatestViewMap = new HashMap<>();
++    private static Map<String, ViewKey> mLatestViewMap = new HashMap<>();
 +    private static Map<ViewKey, ViewInfo> mViewInfoMap = new HashMap<>();
-+    private static Map<ViewKey, Map<String, Boolean>> mViewPermMap = new HashMap<>();
++    private static Map<ViewKey, List<String>> mViewPermMap = new HashMap<>();
++    private static Map<String, List<String>> mNameForUidPermMap = new HashMap<>();
++
 +    ViewKey mCurrView;
 +    Context mContext;
 +
@@ -377,9 +383,11 @@ index 0000000..571e914
 +        mContext = context;
 +    }
 +
++    /*
++     * Generate a unique key for identifying a View
++     * contains activity name, package name and it's hierarchy path
++     */
 +    private ViewKey genViewKey(List<String> idxList) {
-+        int callingUid = Binder.getCallingUid();
-+
 +        String idxListJoin = "";
 +        for (String idx: idxList) {
 +            idxListJoin += idx;
@@ -390,26 +398,114 @@ index 0000000..571e914
 +        String topActivityName = taskInfo.get(0).topActivity.getClassName();
 +        String packageName = taskInfo.get(0).topActivity.getPackageName();
 +
-+        Log.d("DroidCCService: topActivity: ", topActivityName);
-+        Log.d("DroidCCService: packageName: ", packageName);
-+
-+        return new ViewKey(callingUid, topActivityName, packageName, idxListJoin);
++        return new ViewKey(topActivityName, packageName, idxListJoin);
 +    }
 +
++    /*
++     * Generate nameForUid given uid using package manager
++     */
++    private String genNameForUid(int uid) {
++        PackageManager pm = mContext.getPackageManager();
++        // Package Manager might haven't started
++        if (pm == null) {
++            return null;
++        }
++        return pm.getNameForUid(uid);
++    }
++
++    /*
++     * Generate packagesForUid given uid using package manager
++     */
++    private String[] genPackagesForUid(int uid) {
++        PackageManager pm = mContext.getPackageManager();
++        // Package Manager might haven't started
++        if (pm == null) {
++            return null;
++        }
++        return pm.getPackagesForUid(uid);
++    }
++
++    private ViewInfo genViewInfo(List<String> idxList, List<String> viewStrList) {
++        List<Integer> intIdxList = new ArrayList<>();
++        for (String idx: idxList) {
++            intIdxList.add(Integer.parseInt(idx));
++        }
++        return new ViewInfo(intIdxList, viewStrList);
++    }
++
++    private void clearUidState(int uid) {
++        String nameForUid = genNameForUid(uid);
++        if (nameForUid != null && mLatestViewMap.containsKey(nameForUid)) {
++            ViewKey viewKey = mLatestViewMap.get(nameForUid);
++            mLatestViewMap.put(nameForUid, null);
++            mViewInfoMap.put(viewKey, null);
++        }
++    }
++
++    /*
++     * Set mCurrView according to the view information
++     * update ViewInfo accoriding to mCurrView
++     * generate a slot for perm rules if there's none yet
++     */
 +    @Override
 +    public void setView(List<String> idxList, List<String> viewStrList) throws RemoteException {
++        String nameForUid = genNameForUid(Binder.getCallingUid());
++        // nameForUid shouldn't be null for calls from android.view.View
++        if (nameForUid == null) {
++            Log.d("DroidCCService: setView", "nameForUid is null");
++            return;
++        }
++
 +        mCurrView = genViewKey(idxList);
-+        mViewPermMap.put(mCurrView, new HashMap<String, Boolean>());
++        Log.d("DroidCCService: setView: mCurrView", mCurrView.toString());
++
++        mLatestViewMap.put(nameForUid, mCurrView);
++        mViewInfoMap.put(mCurrView, genViewInfo(idxList, viewStrList));
++        if (mViewPermMap.containsKey(mCurrView) == false) {
++            mViewPermMap.put(mCurrView, new ArrayList<String>());
++        }
 +    }
 +
++    /*
++     * Check permission using nameForUid
++     * cannot tell difference from packages in the same uid
++     */
 +    @Override
 +    public boolean checkPermission(String permission, int uid) throws RemoteException {
-+        Log.d("DroidCCService: checking permission: ", permission);
-+        Log.d("DroidCCService: uid: ", Integer.toString(uid));
++        String nameForUid = genNameForUid(uid);
++        if (nameForUid == null) {
++            return true;
++        }
++
++        if (mLatestViewMap.containsKey(nameForUid) == false) {
++            // Permission request from uid showing up first time
++            // and without any UI information
++            mLatestViewMap.put(nameForUid, null);
++        }
++
++        ViewKey latestViewKey = mLatestViewMap.get(nameForUid);
++        if (latestViewKey == null) {
++            // Permission requests when app starts up
++            if (mNameForUidPermMap.containsKey(nameForUid)) {
++                List<String> permList = mViewPermMap.get(latestViewKey);
++                if (permList.contains(permission)) {
++                    Log.d("DroidCCService: checkPermission: nameForUid", nameForUid);
++                    Log.d("DroidCCService: checkPermission: QUIET_NON_NULL_DENY", permission);
++                    return false;
++                }
++            }
++        } else {
++            // Permission requests after UI events
++            ViewInfo viewInfo = mViewInfoMap.get(latestViewKey);
++            List<String> permList = mViewPermMap.get(latestViewKey);
++            if (permList.contains(permission)) {
++                Log.d("DroidCCService: checkPermission: UI_DENY", permission);
++                return false;
++            }
++        }
 +        return true;
 +    }
 +}
-\ No newline at end of file
 diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
 index 7654cc9..2b52e4b 100644
 --- a/services/core/java/com/android/server/pm/PackageManagerService.java
