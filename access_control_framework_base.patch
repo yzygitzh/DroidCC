@@ -1,6 +1,6 @@
-From 73eb7fc691d87360e9c4e6613042c6a1dd1134ca Mon Sep 17 00:00:00 2001
+From fe2046c4750c0a3ad4bedf8a59c3364e1f977f82 Mon Sep 17 00:00:00 2001
 From: Ziyue Yang <yzylivezh@hotmail.com>
-Date: Wed, 12 Apr 2017 15:59:37 +0800
+Date: Wed, 12 Apr 2017 19:12:48 +0800
 Subject: [PATCH] access control patch
 
 ---
@@ -14,11 +14,11 @@ Subject: [PATCH] access control patch
  core/java/android/view/View.java                   |  64 ++++++
  core/java/android/view/ViewGroup.java              |  30 ++-
  core/java/android/view/ViewRootImpl.java           |  13 ++
- .../java/com/android/server/DroidCCService.java    | 214 +++++++++++++++++++++
+ .../java/com/android/server/DroidCCService.java    | 226 +++++++++++++++++++++
  .../android/server/am/ActivityManagerService.java  |  10 +
  .../android/server/pm/PackageManagerService.java   |  35 +++-
  services/java/com/android/server/SystemServer.java |   8 +
- 14 files changed, 496 insertions(+), 19 deletions(-)
+ 14 files changed, 508 insertions(+), 19 deletions(-)
  create mode 100644 core/java/android/app/DroidCCManager.java
  create mode 100644 core/java/android/os/IDroidCCService.aidl
  create mode 100644 services/core/java/com/android/server/DroidCCService.java
@@ -36,7 +36,7 @@ index 99e0c46..9a73dd4 100644
  	core/java/android/os/IMessenger.aidl \
  	core/java/android/os/INetworkActivityListener.aidl \
 diff --git a/api/current.txt b/api/current.txt
-index d7fdb2d..bf4cfb6 100644
+index d7fdb2d..006cea2 100644
 --- a/api/current.txt
 +++ b/api/current.txt
 @@ -4187,6 +4187,14 @@ package android.app {
@@ -46,7 +46,7 @@ index d7fdb2d..bf4cfb6 100644
 +  public class DroidCCManager {
 +    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
 +    method public boolean checkPermission(java.lang.String, int);
-+    method public void clearViewPid(int);
++    method public void clearView(int, int);
 +    method public void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +    method public void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +  }
@@ -68,7 +68,7 @@ index d7fdb2d..bf4cfb6 100644
  
 +  public abstract interface IDroidCCService implements android.os.IInterface {
 +    method public abstract boolean checkPermission(java.lang.String, int) throws android.os.RemoteException;
-+    method public abstract void clearViewPid(int) throws android.os.RemoteException;
++    method public abstract void clearView(int, int) throws android.os.RemoteException;
 +    method public abstract void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +    method public abstract void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +  }
@@ -100,7 +100,7 @@ index d7fdb2d..bf4cfb6 100644
      method public void setAccessibilityLiveRegion(int);
      method public void setAccessibilityTraversalAfter(int);
 diff --git a/api/system-current.txt b/api/system-current.txt
-index 3c88e59..b0f6668 100644
+index 3c88e59..40b7233 100644
 --- a/api/system-current.txt
 +++ b/api/system-current.txt
 @@ -4304,6 +4304,14 @@ package android.app {
@@ -110,7 +110,7 @@ index 3c88e59..b0f6668 100644
 +  public class DroidCCManager {
 +    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
 +    method public boolean checkPermission(java.lang.String, int);
-+    method public void clearViewPid(int);
++    method public void clearView(int, int);
 +    method public void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +    method public void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +  }
@@ -132,7 +132,7 @@ index 3c88e59..b0f6668 100644
  
 +  public abstract interface IDroidCCService implements android.os.IInterface {
 +    method public abstract boolean checkPermission(java.lang.String, int) throws android.os.RemoteException;
-+    method public abstract void clearViewPid(int) throws android.os.RemoteException;
++    method public abstract void clearView(int, int) throws android.os.RemoteException;
 +    method public abstract void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +    method public abstract void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +  }
@@ -165,7 +165,7 @@ index 3c88e59..b0f6668 100644
      method public void setAccessibilityTraversalAfter(int);
 diff --git a/core/java/android/app/DroidCCManager.java b/core/java/android/app/DroidCCManager.java
 new file mode 100644
-index 0000000..498f62d
+index 0000000..8252880
 --- /dev/null
 +++ b/core/java/android/app/DroidCCManager.java
 @@ -0,0 +1,63 @@
@@ -223,9 +223,9 @@ index 0000000..498f62d
 +        return true;
 +    }
 +
-+    public void clearViewPid(int pid) {
++    public void clearView(int uid, int pid) {
 +        try {
-+            mService.clearViewPid(pid);
++            mService.clearView(uid, pid);
 +        } catch(Exception e) {
 +            Log.e("DroidCCManager", e.toString());
 +            e.printStackTrace();
@@ -276,7 +276,7 @@ index 758b6ff..ec2288e 100644
       * process and user ID running in the system.
 diff --git a/core/java/android/os/IDroidCCService.aidl b/core/java/android/os/IDroidCCService.aidl
 new file mode 100644
-index 0000000..a88d3bc
+index 0000000..79856e5
 --- /dev/null
 +++ b/core/java/android/os/IDroidCCService.aidl
 @@ -0,0 +1,15 @@
@@ -293,7 +293,7 @@ index 0000000..a88d3bc
 +    void setViewTouch(in List<String> idxList, in List<String> viewStrList);
 +    void setViewBack(in List<String> idxList, in List<String> viewStrList);
 +    boolean checkPermission(String permission, int uid);
-+    void clearViewPid(int pid);
++    void clearView(int uid, int pid);
 +}
 diff --git a/core/java/android/view/View.java b/core/java/android/view/View.java
 index dea004e..db8fa17 100644
@@ -570,10 +570,10 @@ index 42402eb..97df1bf 100644
                  // If delivering a new key event, make sure the window is
 diff --git a/services/core/java/com/android/server/DroidCCService.java b/services/core/java/com/android/server/DroidCCService.java
 new file mode 100644
-index 0000000..e49ed98
+index 0000000..d37f6c1
 --- /dev/null
 +++ b/services/core/java/com/android/server/DroidCCService.java
-@@ -0,0 +1,214 @@
+@@ -0,0 +1,226 @@
 +package com.android.server;
 +
 +import android.app.ActivityManager;
@@ -592,29 +592,28 @@ index 0000000..e49ed98
 +import java.util.List;
 +import java.util.ArrayList;
 +
++// transition key: should keep same in a single device
 +class ViewKey {
 +    String mActivityName;
 +    String mPackageName;
 +    String mIdxListJoin;
 +    int mViewActionId;
-+    int mPid;
 +
-+    public ViewKey(String activityName, String packageName, String idxListJoin, int viewActionId, int pid) {
++    public ViewKey(String activityName, String packageName, String idxListJoin, int viewActionId) {
 +        mActivityName = activityName;
 +        mPackageName = packageName;
 +        mIdxListJoin = idxListJoin;
 +        mViewActionId = viewActionId;
-+        mPid = pid;
 +    }
 +
 +    public String toString() {
 +        return "activity=" + mActivityName + ";package=" + mPackageName +
 +               ";idx_list_join=" + mIdxListJoin +
-+               ";view_action_id=" + Integer.toString(mViewActionId) +
-+               ";pid=" + Integer.toString(mPid);
++               ";view_action_id=" + Integer.toString(mViewActionId);
 +    }
 +}
 +
++// should keep same in a single device
 +class ViewInfo {
 +    List<Integer> mIdxList;
 +    List<String> mViewStrList;
@@ -629,8 +628,11 @@ index 0000000..e49ed98
 +    public static final int VIEW_TOUCH = 0;
 +    public static final int VIEW_BACK = 1;
 +
-+    private static Map<String, ViewKey> mLatestViewMap = new HashMap<>();
++    private static Map<String, ViewKey> mUidViewMap = new HashMap<>();
 +    private static Map<ViewKey, ViewInfo> mViewInfoMap = new HashMap<>();
++    // the pid last touched uid's view belongs
++    private static Map<String, Integer> mUidPidMap = new HashMap<>();
++
 +    private static Map<ViewKey, List<String>> mViewPermMap = new HashMap<>();
 +    private static Map<String, List<String>> mNameForUidPermMap = new HashMap<>();
 +
@@ -653,11 +655,12 @@ index 0000000..e49ed98
 +        idxListJoin = idxListJoin.substring(1);
 +
 +        ActivityManager am = (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
++        // TODO: deprecated method getRunningTask
 +        List<ActivityManager.RunningTaskInfo> taskInfo = am.getRunningTasks(1);
 +        String topActivityName = taskInfo.get(0).topActivity.getClassName();
 +        String packageName = taskInfo.get(0).topActivity.getPackageName();
 +
-+        return new ViewKey(topActivityName, packageName, idxListJoin, viewActionId, Binder.getCallingPid());
++        return new ViewKey(topActivityName, packageName, idxListJoin, viewActionId);
 +    }
 +
 +    /*
@@ -692,19 +695,12 @@ index 0000000..e49ed98
 +        return new ViewInfo(intIdxList, viewStrList);
 +    }
 +
-+    private void clearUidState(int uid) {
-+        String nameForUid = genNameForUid(uid);
-+        if (nameForUid != null && mLatestViewMap.containsKey(nameForUid)) {
-+            ViewKey viewKey = mLatestViewMap.get(nameForUid);
-+            mLatestViewMap.put(nameForUid, null);
-+            mViewInfoMap.put(viewKey, null);
-+        }
-+    }
-+
 +    /*
 +     * Set mCurrView according to the view information
-+     * update ViewInfo accoriding to mCurrView
-+     * generate a slot for perm rules if there's none yet
++     * update mUidViewMap and mUidPidMap (pid <-> uid <-> view)
++     * update mViewInfoMap accoriding to mCurrView (view <-> viewinfo)
++     * generate a slot for view perm rules if there's none yet (view <-> permlist)
++     * only "view" is static
 +     */
 +    private void setView(List<String> idxList, List<String> viewStrList, int viewActionId) {
 +        String nameForUid = genNameForUid(Binder.getCallingUid());
@@ -716,9 +712,13 @@ index 0000000..e49ed98
 +
 +        mCurrView = genViewKey(idxList, viewActionId);
 +        Log.d("DroidCCService: setView: mCurrView", mCurrView.toString());
++        Log.d("DroidCCService: nameForUid", nameForUid);
++        Log.d("DroidCCService: pid", Integer.toString(Binder.getCallingPid()));
 +
-+        mLatestViewMap.put(nameForUid, mCurrView);
++        mUidViewMap.put(nameForUid, mCurrView);
++        mUidPidMap.put(nameForUid, Binder.getCallingPid());
 +        mViewInfoMap.put(mCurrView, genViewInfo(idxList, viewStrList));
++
 +        if (mViewPermMap.containsKey(mCurrView) == false) {
 +            mViewPermMap.put(mCurrView, new ArrayList<String>());
 +        }
@@ -728,7 +728,7 @@ index 0000000..e49ed98
 +     * Set mCurrView according to the view information WHEN TOUCHING
 +     */
 +    @Override
-+    public void setViewTouch(List<String> idxList, List<String> viewStrList) throws RemoteException {
++    public synchronized void setViewTouch(List<String> idxList, List<String> viewStrList) throws RemoteException {
 +        setView(idxList, viewStrList, VIEW_TOUCH);
 +    }
 +
@@ -736,17 +736,29 @@ index 0000000..e49ed98
 +     * Set mCurrView according to the view information WHEN BACK BUTTON
 +     */
 +    @Override
-+    public void setViewBack(List<String> idxList, List<String> viewStrList) throws RemoteException {
++    public synchronized void setViewBack(List<String> idxList, List<String> viewStrList) throws RemoteException {
 +        setView(idxList, viewStrList, VIEW_BACK);
 +    }
 +
 +    /*
-+     * Clear viewKey corresponding to the pid
-+     * only clear viewKey corresponding to the <uid, pid> pair
++     * Clear viewKey according to the <uid, pid> pair
++     * <uid, pid, view, viewinfo, perm> => <view, perm>
 +     */
 +    @Override
-+    public void clearViewPid(int pid) throws RemoteException {
-+        Log.d("DroidCCService: clearViewPid", Integer.toString(pid));
++    public synchronized void clearView(int uid, int pid) throws RemoteException {
++        Log.d("DroidCCService: clearView: uid", Integer.toString(uid));
++        Log.d("DroidCCService: clearView: pid", Integer.toString(pid));
++        String nameForUid = genNameForUid(uid);
++        if (nameForUid != null) {
++            Log.d("DroidCCService: clearView: nameForUid", nameForUid);
++        }
++        if (nameForUid != null && mUidViewMap.containsKey(nameForUid) &&
++            mUidPidMap.containsKey(nameForUid) && mUidPidMap.get(nameForUid) == pid) {
++            mViewInfoMap.put(mUidViewMap.get(nameForUid), null);
++            mUidPidMap.put(nameForUid, null);
++            mUidViewMap.put(nameForUid, null);
++            Log.d("DroidCCService: clearView", "killed");
++        }
 +    }
 +
 +    /*
@@ -754,23 +766,23 @@ index 0000000..e49ed98
 +     * cannot tell difference from packages in the same uid
 +     */
 +    @Override
-+    public boolean checkPermission(String permission, int uid) throws RemoteException {
++    public synchronized boolean checkPermission(String permission, int uid) throws RemoteException {
 +        String nameForUid = genNameForUid(uid);
 +        if (nameForUid == null) {
 +            return true;
 +        }
 +
-+        if (mLatestViewMap.containsKey(nameForUid) == false) {
++        if (mUidViewMap.containsKey(nameForUid) == false) {
 +            // Permission request from uid showing up first time
 +            // and without any UI information
-+            mLatestViewMap.put(nameForUid, null);
++            mUidViewMap.put(nameForUid, null);
 +        }
 +
-+        ViewKey latestViewKey = mLatestViewMap.get(nameForUid);
-+        if (latestViewKey == null) {
++        ViewKey uidViewKey = mUidViewMap.get(nameForUid);
++        if (uidViewKey == null) {
 +            // Permission requests when app starts up
 +            if (mNameForUidPermMap.containsKey(nameForUid)) {
-+                List<String> permList = mViewPermMap.get(latestViewKey);
++                List<String> permList = mViewPermMap.get(uidViewKey);
 +                if (permList.contains(permission)) {
 +                    Log.d("DroidCCService: checkPermission: QUIET_NON_NULL_DENY", permission);
 +                    return false;
@@ -778,8 +790,8 @@ index 0000000..e49ed98
 +            }
 +        } else {
 +            // Permission requests after UI events
-+            ViewInfo viewInfo = mViewInfoMap.get(latestViewKey);
-+            List<String> permList = mViewPermMap.get(latestViewKey);
++            ViewInfo viewInfo = mViewInfoMap.get(uidViewKey);
++            List<String> permList = mViewPermMap.get(uidViewKey);
 +            if (permList.contains(permission)) {
 +                Log.d("DroidCCService: checkPermission: UI_DENY", permission);
 +                return false;
@@ -789,7 +801,7 @@ index 0000000..e49ed98
 +    }
 +}
 diff --git a/services/core/java/com/android/server/am/ActivityManagerService.java b/services/core/java/com/android/server/am/ActivityManagerService.java
-index 701cb84..094033f 100644
+index 701cb84..8d6ed66 100644
 --- a/services/core/java/com/android/server/am/ActivityManagerService.java
 +++ b/services/core/java/com/android/server/am/ActivityManagerService.java
 @@ -40,6 +40,7 @@ import android.Manifest;
@@ -807,7 +819,7 @@ index 701cb84..094033f 100644
 +        // Tell DroidCC this app (by pid) has died
 +        try {
 +            DroidCCManager dcm = (DroidCCManager) mContext.getSystemService("droid_cc");
-+            dcm.clearViewPid(pid);
++            dcm.clearView(app.uid, pid);
 +        } catch (Exception e) {
 +            Log.e("ActivityManagerService: DroidCC: ", e.toString());
 +            e.printStackTrace();

@@ -17,5 +17,5 @@ gen_patch () {
 	mv 000* "$PATCH_DIR/access_control_$2.patch"
 }
 
-gen_patch $FRAMEWORK_BASE "FRAMEWORK_BASE"
-gen_patch $SEPOLICY "SEPOLICY"
+gen_patch $FRAMEWORK_BASE "framework_base"
+gen_patch $SEPOLICY "external_sepolicy"
