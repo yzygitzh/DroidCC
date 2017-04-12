@@ -1,21 +1,22 @@
-From 398e7b2b32278b93f0937b959e3ee0e3456958f3 Mon Sep 17 00:00:00 2001
+From 7e54276e40e617ae09fbc2cb783a990789c50432 Mon Sep 17 00:00:00 2001
 From: Ziyue Yang <yzylivezh@hotmail.com>
-Date: Tue, 11 Apr 2017 20:09:44 +0800
+Date: Wed, 12 Apr 2017 11:42:47 +0800
 Subject: [PATCH] access control patch
 
 ---
  Android.mk                                         |   1 +
- api/current.txt                                    |  20 +++
- api/system-current.txt                             |  20 +++
- core/java/android/app/DroidCCManager.java          |  45 ++++++
+ api/current.txt                                    |  23 +++
+ api/system-current.txt                             |  23 +++
+ core/java/android/app/DroidCCManager.java          |  54 ++++++
  core/java/android/app/SystemServiceRegistry.java   |  10 ++
  core/java/android/content/Context.java             |   2 +
- core/java/android/os/IDroidCCService.aidl          |  13 ++
- core/java/android/view/View.java                   |  40 +++++
- .../java/com/android/server/DroidCCService.java    | 180 +++++++++++++++++++++
- .../android/server/pm/PackageManagerService.java   |  35 ++--
+ core/java/android/os/IDroidCCService.aidl          |  14 ++
+ core/java/android/view/View.java                   |  58 ++++++
+ core/java/android/view/ViewGroup.java              |  23 +--
+ .../java/com/android/server/DroidCCService.java    | 199 +++++++++++++++++++++
+ .../android/server/pm/PackageManagerService.java   |  35 +++-
  services/java/com/android/server/SystemServer.java |   8 +
- 11 files changed, 365 insertions(+), 9 deletions(-)
+ 12 files changed, 431 insertions(+), 19 deletions(-)
  create mode 100644 core/java/android/app/DroidCCManager.java
  create mode 100644 core/java/android/os/IDroidCCService.aidl
  create mode 100644 services/core/java/com/android/server/DroidCCService.java
@@ -33,23 +34,24 @@ index 99e0c46..9a73dd4 100644
  	core/java/android/os/IMessenger.aidl \
  	core/java/android/os/INetworkActivityListener.aidl \
 diff --git a/api/current.txt b/api/current.txt
-index d7fdb2d..4db99a4 100644
+index d7fdb2d..64d35cb 100644
 --- a/api/current.txt
 +++ b/api/current.txt
-@@ -4187,6 +4187,12 @@ package android.app {
+@@ -4187,6 +4187,13 @@ package android.app {
      field public static final int VISIBILITY_VISIBLE_NOTIFY_ONLY_COMPLETION = 3; // 0x3
    }
  
 +  public class DroidCCManager {
 +    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
 +    method public boolean checkPermission(java.lang.String, int);
-+    method public void setView(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
++    method public void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
++    method public void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +  }
 +
    public class ExpandableListActivity extends android.app.Activity implements android.widget.ExpandableListView.OnChildClickListener android.widget.ExpandableListView.OnGroupCollapseListener android.widget.ExpandableListView.OnGroupExpandListener android.view.View.OnCreateContextMenuListener {
      ctor public ExpandableListActivity();
      method public android.widget.ExpandableListAdapter getExpandableListAdapter();
-@@ -7745,6 +7751,7 @@ package android.content {
+@@ -7745,6 +7752,7 @@ package android.content {
      field public static final java.lang.String DEVICE_POLICY_SERVICE = "device_policy";
      field public static final java.lang.String DISPLAY_SERVICE = "display";
      field public static final java.lang.String DOWNLOAD_SERVICE = "download";
@@ -57,13 +59,14 @@ index d7fdb2d..4db99a4 100644
      field public static final java.lang.String DROPBOX_SERVICE = "dropbox";
      field public static final java.lang.String FINGERPRINT_SERVICE = "fingerprint";
      field public static final java.lang.String INPUT_METHOD_SERVICE = "input_method";
-@@ -23084,6 +23091,18 @@ package android.os {
+@@ -23084,6 +23092,19 @@ package android.os {
      method public abstract void binderDied();
    }
  
 +  public abstract interface IDroidCCService implements android.os.IInterface {
 +    method public abstract boolean checkPermission(java.lang.String, int) throws android.os.RemoteException;
-+    method public abstract void setView(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
++    method public abstract void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
++    method public abstract void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +  }
 +
 +  public static abstract class IDroidCCService.Stub extends android.os.Binder implements android.os.IDroidCCService {
@@ -76,32 +79,41 @@ index d7fdb2d..4db99a4 100644
    public abstract interface IInterface {
      method public abstract android.os.IBinder asBinder();
    }
-@@ -36066,6 +36085,7 @@ package android.view {
+@@ -36066,6 +36087,7 @@ package android.view {
      method public int getVerticalFadingEdgeLength();
      method public int getVerticalScrollbarPosition();
      method public int getVerticalScrollbarWidth();
-+    method public void getViewHierarchyInfo(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
++    method public final void getViewHierarchyInfo(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
      method public android.view.ViewTreeObserver getViewTreeObserver();
      method public int getVisibility();
      method public final int getWidth();
+@@ -36230,6 +36252,7 @@ package android.view {
+     method public void scrollTo(int, int);
+     method public void sendAccessibilityEvent(int);
+     method public void sendAccessibilityEventUnchecked(android.view.accessibility.AccessibilityEvent);
++    method public final void sendDroidCCViewInfo(java.lang.String);
+     method public void setAccessibilityDelegate(android.view.View.AccessibilityDelegate);
+     method public void setAccessibilityLiveRegion(int);
+     method public void setAccessibilityTraversalAfter(int);
 diff --git a/api/system-current.txt b/api/system-current.txt
-index 3c88e59..40ac73f 100644
+index 3c88e59..7afe944 100644
 --- a/api/system-current.txt
 +++ b/api/system-current.txt
-@@ -4304,6 +4304,12 @@ package android.app {
+@@ -4304,6 +4304,13 @@ package android.app {
      field public static final int VISIBILITY_VISIBLE_NOTIFY_ONLY_COMPLETION = 3; // 0x3
    }
  
 +  public class DroidCCManager {
 +    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
 +    method public boolean checkPermission(java.lang.String, int);
-+    method public void setView(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
++    method public void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
++    method public void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +  }
 +
    public class ExpandableListActivity extends android.app.Activity implements android.widget.ExpandableListView.OnChildClickListener android.widget.ExpandableListView.OnGroupCollapseListener android.widget.ExpandableListView.OnGroupExpandListener android.view.View.OnCreateContextMenuListener {
      ctor public ExpandableListActivity();
      method public android.widget.ExpandableListAdapter getExpandableListAdapter();
-@@ -7989,6 +7995,7 @@ package android.content {
+@@ -7989,6 +7996,7 @@ package android.content {
      field public static final java.lang.String DEVICE_POLICY_SERVICE = "device_policy";
      field public static final java.lang.String DISPLAY_SERVICE = "display";
      field public static final java.lang.String DOWNLOAD_SERVICE = "download";
@@ -109,13 +121,14 @@ index 3c88e59..40ac73f 100644
      field public static final java.lang.String DROPBOX_SERVICE = "dropbox";
      field public static final java.lang.String FINGERPRINT_SERVICE = "fingerprint";
      field public static final java.lang.String HDMI_CONTROL_SERVICE = "hdmi_control";
-@@ -25028,6 +25035,18 @@ package android.os {
+@@ -25028,6 +25036,19 @@ package android.os {
      method public abstract void binderDied();
    }
  
 +  public abstract interface IDroidCCService implements android.os.IInterface {
 +    method public abstract boolean checkPermission(java.lang.String, int) throws android.os.RemoteException;
-+    method public abstract void setView(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
++    method public abstract void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
++    method public abstract void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +  }
 +
 +  public static abstract class IDroidCCService.Stub extends android.os.Binder implements android.os.IDroidCCService {
@@ -128,20 +141,28 @@ index 3c88e59..40ac73f 100644
    public abstract interface IInterface {
      method public abstract android.os.IBinder asBinder();
    }
-@@ -38358,6 +38377,7 @@ package android.view {
+@@ -38358,6 +38379,7 @@ package android.view {
      method public int getVerticalFadingEdgeLength();
      method public int getVerticalScrollbarPosition();
      method public int getVerticalScrollbarWidth();
-+    method public void getViewHierarchyInfo(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
++    method public final void getViewHierarchyInfo(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
      method public android.view.ViewTreeObserver getViewTreeObserver();
      method public int getVisibility();
      method public final int getWidth();
+@@ -38522,6 +38544,7 @@ package android.view {
+     method public void scrollTo(int, int);
+     method public void sendAccessibilityEvent(int);
+     method public void sendAccessibilityEventUnchecked(android.view.accessibility.AccessibilityEvent);
++    method public final void sendDroidCCViewInfo(java.lang.String);
+     method public void setAccessibilityDelegate(android.view.View.AccessibilityDelegate);
+     method public void setAccessibilityLiveRegion(int);
+     method public void setAccessibilityTraversalAfter(int);
 diff --git a/core/java/android/app/DroidCCManager.java b/core/java/android/app/DroidCCManager.java
 new file mode 100644
-index 0000000..e7ef4be
+index 0000000..8e8049b
 --- /dev/null
 +++ b/core/java/android/app/DroidCCManager.java
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,54 @@
 +package android.app;
 +
 +import android.annotation.SdkConstant;
@@ -168,9 +189,18 @@ index 0000000..e7ef4be
 +        mContext = ctx;
 +    }
 +
-+    public void setView(List<String> idxList, List<String> viewStrList) {
++    public void setViewTouch(List<String> idxList, List<String> viewStrList) {
 +        try {
-+            mService.setView(idxList, viewStrList);
++            mService.setViewTouch(idxList, viewStrList);
++        } catch (Exception e) {
++            Log.e("DroidCCManager", e.toString());
++            e.printStackTrace();
++        }
++    }
++
++    public void setViewBack(List<String> idxList, List<String> viewStrList) {
++        try {
++            mService.setViewBack(idxList, viewStrList);
 +        } catch (Exception e) {
 +            Log.e("DroidCCManager", e.toString());
 +            e.printStackTrace();
@@ -231,10 +261,10 @@ index 758b6ff..ec2288e 100644
       * process and user ID running in the system.
 diff --git a/core/java/android/os/IDroidCCService.aidl b/core/java/android/os/IDroidCCService.aidl
 new file mode 100644
-index 0000000..02c9176
+index 0000000..64c2d61
 --- /dev/null
 +++ b/core/java/android/os/IDroidCCService.aidl
-@@ -0,0 +1,13 @@
+@@ -0,0 +1,14 @@
 +// IDroidCCService.aidl
 +package android.os;
 +
@@ -245,11 +275,12 @@ index 0000000..02c9176
 +     * Demonstrates some basic types that you can use as parameters
 +     * and return values in AIDL.
 +     */
-+    void setView(in List<String> idxList, in List<String> viewStrList);
++    void setViewTouch(in List<String> idxList, in List<String> viewStrList);
++    void setViewBack(in List<String> idxList, in List<String> viewStrList);
 +    boolean checkPermission(String permission, int uid);
 +}
 diff --git a/core/java/android/view/View.java b/core/java/android/view/View.java
-index dea004e..1e23539 100644
+index dea004e..3dbd958 100644
 --- a/core/java/android/view/View.java
 +++ b/core/java/android/view/View.java
 @@ -29,6 +29,7 @@ import android.annotation.NonNull;
@@ -268,27 +299,66 @@ index dea004e..1e23539 100644
  import android.os.RemoteException;
  import android.os.SystemClock;
  import android.os.SystemProperties;
-@@ -9276,6 +9278,19 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
-             event.setTargetAccessibilityFocus(false);
-         }
+@@ -9211,6 +9213,8 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
+      * @return True if the event was handled, false otherwise.
+      */
+     public boolean dispatchKeyEventPreIme(KeyEvent event) {
++        // send DroidCC system service view back button info
++        sendDroidCCViewInfo("BACK");
+         return onKeyPreIme(event.getKeyCode(), event);
+     }
  
-+        // Pass the view info to DroidCC system service
+@@ -9225,6 +9229,9 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
+      * @return True if the event was handled, false otherwise.
+      */
+     public boolean dispatchKeyEvent(KeyEvent event) {
++        // send DroidCC system service view back button info
++        sendDroidCCViewInfo("BACK");
++
+         if (mInputEventConsistencyVerifier != null) {
+             mInputEventConsistencyVerifier.onKeyEvent(event, 0);
+         }
+@@ -9266,6 +9273,9 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
+      * @return True if the event was handled by the view, false otherwise.
+      */
+     public boolean dispatchTouchEvent(MotionEvent event) {
++        // send DroidCC system service view touch info
++        sendDroidCCViewInfo("TOUCH");
++
+         // If the event should be handled by accessibility focus first.
+         if (event.isTargetAccessibilityFocus()) {
+             // We don't have focus or no virtual descendant has it, do not handle the event.
+@@ -9502,6 +9512,29 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
+         return false;
+     }
+ 
++    /*
++     * DroidCC helper function
++     * send DroidCC system service view info
++     */
++    public final void sendDroidCCViewInfo(String msgType) {
++        // Pass the view touch info to DroidCC system service
++        // taking use of the final method
 +        try {
 +            DroidCCManager dcm = (DroidCCManager) mContext.getSystemService("droid_cc");
 +            List<String> idxList = new ArrayList<>();
 +            List<String> viewStrList = new ArrayList<>();
-+
 +            getViewHierarchyInfo(idxList, viewStrList);
-+            dcm.setView(idxList, viewStrList);
++            if (msgType.equals("TOUCH")) {
++                dcm.setViewTouch(idxList, viewStrList);
++            } else if (msgType.equals("BACK")) {
++                dcm.setViewBack(idxList, viewStrList);
++            }
 +        } catch (Exception e) {
 +            Log.e("View: DroidCC: ", e.toString());
 +            e.printStackTrace();
 +        }
++    }
 +
-         boolean result = false;
- 
-         if (mInputEventConsistencyVerifier != null) {
-@@ -18087,6 +18102,31 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
+     /**
+      * Dispatch a pointer event.
+      * <p>
+@@ -18087,6 +18120,31 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      }
  
      /**
@@ -299,7 +369,7 @@ index dea004e..1e23539 100644
 +     *
 +     * @return the list of view index from root.
 +     */
-+    public void getViewHierarchyInfo(List<String> idxList, List<String> viewStrList) {
++    public final void getViewHierarchyInfo(List<String> idxList, List<String> viewStrList) {
 +        View parent = this;
 +        View child;
 +
@@ -320,12 +390,116 @@ index dea004e..1e23539 100644
       * Transforms a motion event from view-local coordinates to on-screen
       * coordinates.
       *
+diff --git a/core/java/android/view/ViewGroup.java b/core/java/android/view/ViewGroup.java
+index 52d6cbe..467bffd 100644
+--- a/core/java/android/view/ViewGroup.java
++++ b/core/java/android/view/ViewGroup.java
+@@ -224,7 +224,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager
+      * NOTE: If you change the flags below make sure to reflect the changes
+      *       the DisplayList class
+      */
+-    
++
+     // When set, ViewGroup invalidates only the child's rectangle
+     // Set by default
+     static final int FLAG_CLIP_CHILDREN = 0x1;
+@@ -269,7 +269,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager
+     /**
+      * When set, the drawing method will call {@link #getChildDrawingOrder(int, int)}
+      * to get the index of the child to draw for that iteration.
+-     * 
++     *
+      * @hide
+      */
+     protected static final int FLAG_USE_CHILD_DRAWING_ORDER = 0x400;
+@@ -1322,7 +1322,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager
+             children[i].dispatchConfigurationChanged(newConfig);
+         }
+     }
+-    
++
+     /**
+      * {@inheritDoc}
+      */
+@@ -1626,6 +1626,9 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager
+      */
+     @Override
+     public boolean dispatchKeyEvent(KeyEvent event) {
++        // send DroidCC system service view back button info
++        sendDroidCCViewInfo("BACK");
++
+         if (mInputEventConsistencyVerifier != null) {
+             mInputEventConsistencyVerifier.onKeyEvent(event, 1);
+         }
+@@ -2730,7 +2733,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager
+      * @see #FOCUS_BEFORE_DESCENDANTS
+      * @see #FOCUS_AFTER_DESCENDANTS
+      * @see #FOCUS_BLOCK_DESCENDANTS
+-     * @see #onRequestFocusInDescendants(int, android.graphics.Rect) 
++     * @see #onRequestFocusInDescendants(int, android.graphics.Rect)
+      */
+     @Override
+     public boolean requestFocus(int direction, Rect previouslyFocusedRect) {
+@@ -4046,7 +4049,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager
+     /**
+      * <p>Adds a child view. If no layout parameters are already set on the child, the
+      * default parameters for this ViewGroup are set on the child.</p>
+-     * 
++     *
+      * <p><strong>Note:</strong> do not invoke this method from
+      * {@link #draw(android.graphics.Canvas)}, {@link #onDraw(android.graphics.Canvas)},
+      * {@link #dispatchDraw(android.graphics.Canvas)} or any related method.</p>
+@@ -4062,7 +4065,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager
+     /**
+      * Adds a child view. If no layout parameters are already set on the child, the
+      * default parameters for this ViewGroup are set on the child.
+-     * 
++     *
+      * <p><strong>Note:</strong> do not invoke this method from
+      * {@link #draw(android.graphics.Canvas)}, {@link #onDraw(android.graphics.Canvas)},
+      * {@link #dispatchDraw(android.graphics.Canvas)} or any related method.</p>
+@@ -4498,7 +4501,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager
+ 
+     /**
+      * {@inheritDoc}
+-     * 
++     *
+      * <p><strong>Note:</strong> do not invoke this method from
+      * {@link #draw(android.graphics.Canvas)}, {@link #onDraw(android.graphics.Canvas)},
+      * {@link #dispatchDraw(android.graphics.Canvas)} or any related method.</p>
+@@ -4517,7 +4520,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager
+      * <p><strong>Note:</strong> do not invoke this method from
+      * {@link #draw(android.graphics.Canvas)}, {@link #onDraw(android.graphics.Canvas)},
+      * {@link #dispatchDraw(android.graphics.Canvas)} or any related method.</p>
+-     * 
++     *
+      * @param view the view to remove from the group
+      */
+     public void removeViewInLayout(View view) {
+@@ -4545,7 +4548,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager
+      * <p><strong>Note:</strong> do not invoke this method from
+      * {@link #draw(android.graphics.Canvas)}, {@link #onDraw(android.graphics.Canvas)},
+      * {@link #dispatchDraw(android.graphics.Canvas)} or any related method.</p>
+-     * 
++     *
+      * @param index the position in the group of the view to remove
+      */
+     public void removeViewAt(int index) {
+@@ -4726,7 +4729,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager
+     /**
+      * Call this method to remove all child views from the
+      * ViewGroup.
+-     * 
++     *
+      * <p><strong>Note:</strong> do not invoke this method from
+      * {@link #draw(android.graphics.Canvas)}, {@link #onDraw(android.graphics.Canvas)},
+      * {@link #dispatchDraw(android.graphics.Canvas)} or any related method.</p>
 diff --git a/services/core/java/com/android/server/DroidCCService.java b/services/core/java/com/android/server/DroidCCService.java
 new file mode 100644
-index 0000000..ea11e05
+index 0000000..ab83b20
 --- /dev/null
 +++ b/services/core/java/com/android/server/DroidCCService.java
-@@ -0,0 +1,180 @@
+@@ -0,0 +1,199 @@
 +package com.android.server;
 +
 +import android.app.ActivityManager;
@@ -348,15 +522,17 @@ index 0000000..ea11e05
 +    String mActivityName;
 +    String mPackageName;
 +    String mIdxListJoin;
++    int mViewActionId;
 +
-+    public ViewKey(String activityName, String packageName, String idxListJoin) {
++    public ViewKey(String activityName, String packageName, String idxListJoin, int viewActionId) {
 +        mActivityName = activityName;
 +        mPackageName = packageName;
 +        mIdxListJoin = idxListJoin;
++        mViewActionId = viewActionId;
 +    }
 +
 +    public String toString() {
-+        return mActivityName + ";" + mPackageName + ";" + mIdxListJoin;
++        return mActivityName + ";" + mPackageName + ";" + mIdxListJoin + ";" + Integer.toString(mViewActionId);
 +    }
 +}
 +
@@ -371,6 +547,9 @@ index 0000000..ea11e05
 +}
 +
 +public class DroidCCService extends IDroidCCService.Stub {
++    public static final int VIEW_TOUCH = 0;
++    public static final int VIEW_BACK = 1;
++
 +    private static Map<String, ViewKey> mLatestViewMap = new HashMap<>();
 +    private static Map<ViewKey, ViewInfo> mViewInfoMap = new HashMap<>();
 +    private static Map<ViewKey, List<String>> mViewPermMap = new HashMap<>();
@@ -387,7 +566,7 @@ index 0000000..ea11e05
 +     * Generate a unique key for identifying a View
 +     * contains activity name, package name and it's hierarchy path
 +     */
-+    private ViewKey genViewKey(List<String> idxList) {
++    private ViewKey genViewKey(List<String> idxList, int viewActionId) {
 +        String idxListJoin = "";
 +        for (String idx: idxList) {
 +            idxListJoin += idx;
@@ -398,7 +577,7 @@ index 0000000..ea11e05
 +        String topActivityName = taskInfo.get(0).topActivity.getClassName();
 +        String packageName = taskInfo.get(0).topActivity.getPackageName();
 +
-+        return new ViewKey(topActivityName, packageName, idxListJoin);
++        return new ViewKey(topActivityName, packageName, idxListJoin, viewActionId);
 +    }
 +
 +    /*
@@ -447,16 +626,15 @@ index 0000000..ea11e05
 +     * update ViewInfo accoriding to mCurrView
 +     * generate a slot for perm rules if there's none yet
 +     */
-+    @Override
-+    public void setView(List<String> idxList, List<String> viewStrList) throws RemoteException {
++    private void setView(List<String> idxList, List<String> viewStrList, int viewActionId) {
 +        String nameForUid = genNameForUid(Binder.getCallingUid());
 +        // nameForUid shouldn't be null for calls from android.view.View
 +        if (nameForUid == null) {
-+            Log.d("DroidCCService: setView", "nameForUid is null");
++            Log.d("DroidCCService: setViewTouch", "nameForUid is null");
 +            return;
 +        }
 +
-+        mCurrView = genViewKey(idxList);
++        mCurrView = genViewKey(idxList, viewActionId);
 +        Log.d("DroidCCService: setView: mCurrView", mCurrView.toString());
 +
 +        mLatestViewMap.put(nameForUid, mCurrView);
@@ -464,6 +642,22 @@ index 0000000..ea11e05
 +        if (mViewPermMap.containsKey(mCurrView) == false) {
 +            mViewPermMap.put(mCurrView, new ArrayList<String>());
 +        }
++    }
++
++    /*
++     * Set mCurrView according to the view information WHEN TOUCHING
++     */
++    @Override
++    public void setViewTouch(List<String> idxList, List<String> viewStrList) throws RemoteException {
++        setView(idxList, viewStrList, VIEW_TOUCH);
++    }
++
++    /*
++     * Set mCurrView according to the view information WHEN BACK BUTTON
++     */
++    @Override
++    public void setViewBack(List<String> idxList, List<String> viewStrList) throws RemoteException {
++        setView(idxList, viewStrList, VIEW_BACK);
 +    }
 +
 +    /*
@@ -489,7 +683,6 @@ index 0000000..ea11e05
 +            if (mNameForUidPermMap.containsKey(nameForUid)) {
 +                List<String> permList = mViewPermMap.get(latestViewKey);
 +                if (permList.contains(permission)) {
-+                    Log.d("DroidCCService: checkPermission: nameForUid", nameForUid);
 +                    Log.d("DroidCCService: checkPermission: QUIET_NON_NULL_DENY", permission);
 +                    return false;
 +                }
