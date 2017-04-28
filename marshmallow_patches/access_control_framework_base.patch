@@ -1,24 +1,24 @@
-From fe2046c4750c0a3ad4bedf8a59c3364e1f977f82 Mon Sep 17 00:00:00 2001
+From 20546bf298911798665b0e26578bb117f9680e3b Mon Sep 17 00:00:00 2001
 From: Ziyue Yang <yzylivezh@hotmail.com>
-Date: Wed, 12 Apr 2017 19:12:48 +0800
+Date: Fri, 28 Apr 2017 20:55:01 +0800
 Subject: [PATCH] access control patch
 
 ---
  Android.mk                                         |   1 +
- api/current.txt                                    |  25 +++
- api/system-current.txt                             |  25 +++
- core/java/android/app/DroidCCManager.java          |  63 ++++++
+ api/current.txt                                    |  27 +++
+ api/system-current.txt                             |  27 +++
+ core/java/android/app/DroidCCManager.java          |  72 ++++++
  core/java/android/app/SystemServiceRegistry.java   |  10 +
  core/java/android/content/Context.java             |   2 +
- core/java/android/os/IDroidCCService.aidl          |  15 ++
- core/java/android/view/View.java                   |  64 ++++++
+ core/java/android/os/IDroidCCService.aidl          |  16 ++
+ core/java/android/view/View.java                   |  64 +++++
  core/java/android/view/ViewGroup.java              |  30 ++-
  core/java/android/view/ViewRootImpl.java           |  13 ++
- .../java/com/android/server/DroidCCService.java    | 226 +++++++++++++++++++++
+ .../java/com/android/server/DroidCCService.java    | 257 +++++++++++++++++++++
  .../android/server/am/ActivityManagerService.java  |  10 +
- .../android/server/pm/PackageManagerService.java   |  35 +++-
+ .../android/server/pm/PackageManagerService.java   |  35 ++-
  services/java/com/android/server/SystemServer.java |   8 +
- 14 files changed, 508 insertions(+), 19 deletions(-)
+ 14 files changed, 553 insertions(+), 19 deletions(-)
  create mode 100644 core/java/android/app/DroidCCManager.java
  create mode 100644 core/java/android/os/IDroidCCService.aidl
  create mode 100644 services/core/java/com/android/server/DroidCCService.java
@@ -36,10 +36,10 @@ index 99e0c46..9a73dd4 100644
  	core/java/android/os/IMessenger.aidl \
  	core/java/android/os/INetworkActivityListener.aidl \
 diff --git a/api/current.txt b/api/current.txt
-index d7fdb2d..006cea2 100644
+index d7fdb2d..345cf03 100644
 --- a/api/current.txt
 +++ b/api/current.txt
-@@ -4187,6 +4187,14 @@ package android.app {
+@@ -4187,6 +4187,15 @@ package android.app {
      field public static final int VISIBILITY_VISIBLE_NOTIFY_ONLY_COMPLETION = 3; // 0x3
    }
  
@@ -47,6 +47,7 @@ index d7fdb2d..006cea2 100644
 +    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
 +    method public boolean checkPermission(java.lang.String, int);
 +    method public void clearView(int, int);
++    method public void setPermission(java.lang.String, java.lang.String, boolean);
 +    method public void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +    method public void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +  }
@@ -54,7 +55,7 @@ index d7fdb2d..006cea2 100644
    public class ExpandableListActivity extends android.app.Activity implements android.widget.ExpandableListView.OnChildClickListener android.widget.ExpandableListView.OnGroupCollapseListener android.widget.ExpandableListView.OnGroupExpandListener android.view.View.OnCreateContextMenuListener {
      ctor public ExpandableListActivity();
      method public android.widget.ExpandableListAdapter getExpandableListAdapter();
-@@ -7745,6 +7753,7 @@ package android.content {
+@@ -7745,6 +7754,7 @@ package android.content {
      field public static final java.lang.String DEVICE_POLICY_SERVICE = "device_policy";
      field public static final java.lang.String DISPLAY_SERVICE = "display";
      field public static final java.lang.String DOWNLOAD_SERVICE = "download";
@@ -62,13 +63,14 @@ index d7fdb2d..006cea2 100644
      field public static final java.lang.String DROPBOX_SERVICE = "dropbox";
      field public static final java.lang.String FINGERPRINT_SERVICE = "fingerprint";
      field public static final java.lang.String INPUT_METHOD_SERVICE = "input_method";
-@@ -23084,6 +23093,20 @@ package android.os {
+@@ -23084,6 +23094,21 @@ package android.os {
      method public abstract void binderDied();
    }
  
 +  public abstract interface IDroidCCService implements android.os.IInterface {
 +    method public abstract boolean checkPermission(java.lang.String, int) throws android.os.RemoteException;
 +    method public abstract void clearView(int, int) throws android.os.RemoteException;
++    method public abstract void setPermission(java.lang.String, java.lang.String, boolean) throws android.os.RemoteException;
 +    method public abstract void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +    method public abstract void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +  }
@@ -83,7 +85,7 @@ index d7fdb2d..006cea2 100644
    public abstract interface IInterface {
      method public abstract android.os.IBinder asBinder();
    }
-@@ -36066,6 +36089,7 @@ package android.view {
+@@ -36066,6 +36091,7 @@ package android.view {
      method public int getVerticalFadingEdgeLength();
      method public int getVerticalScrollbarPosition();
      method public int getVerticalScrollbarWidth();
@@ -91,7 +93,7 @@ index d7fdb2d..006cea2 100644
      method public android.view.ViewTreeObserver getViewTreeObserver();
      method public int getVisibility();
      method public final int getWidth();
-@@ -36230,6 +36254,7 @@ package android.view {
+@@ -36230,6 +36256,7 @@ package android.view {
      method public void scrollTo(int, int);
      method public void sendAccessibilityEvent(int);
      method public void sendAccessibilityEventUnchecked(android.view.accessibility.AccessibilityEvent);
@@ -100,10 +102,10 @@ index d7fdb2d..006cea2 100644
      method public void setAccessibilityLiveRegion(int);
      method public void setAccessibilityTraversalAfter(int);
 diff --git a/api/system-current.txt b/api/system-current.txt
-index 3c88e59..40b7233 100644
+index 3c88e59..9bca6b5 100644
 --- a/api/system-current.txt
 +++ b/api/system-current.txt
-@@ -4304,6 +4304,14 @@ package android.app {
+@@ -4304,6 +4304,15 @@ package android.app {
      field public static final int VISIBILITY_VISIBLE_NOTIFY_ONLY_COMPLETION = 3; // 0x3
    }
  
@@ -111,6 +113,7 @@ index 3c88e59..40b7233 100644
 +    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
 +    method public boolean checkPermission(java.lang.String, int);
 +    method public void clearView(int, int);
++    method public void setPermission(java.lang.String, java.lang.String, boolean);
 +    method public void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +    method public void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
 +  }
@@ -118,7 +121,7 @@ index 3c88e59..40b7233 100644
    public class ExpandableListActivity extends android.app.Activity implements android.widget.ExpandableListView.OnChildClickListener android.widget.ExpandableListView.OnGroupCollapseListener android.widget.ExpandableListView.OnGroupExpandListener android.view.View.OnCreateContextMenuListener {
      ctor public ExpandableListActivity();
      method public android.widget.ExpandableListAdapter getExpandableListAdapter();
-@@ -7989,6 +7997,7 @@ package android.content {
+@@ -7989,6 +7998,7 @@ package android.content {
      field public static final java.lang.String DEVICE_POLICY_SERVICE = "device_policy";
      field public static final java.lang.String DISPLAY_SERVICE = "display";
      field public static final java.lang.String DOWNLOAD_SERVICE = "download";
@@ -126,13 +129,14 @@ index 3c88e59..40b7233 100644
      field public static final java.lang.String DROPBOX_SERVICE = "dropbox";
      field public static final java.lang.String FINGERPRINT_SERVICE = "fingerprint";
      field public static final java.lang.String HDMI_CONTROL_SERVICE = "hdmi_control";
-@@ -25028,6 +25037,20 @@ package android.os {
+@@ -25028,6 +25038,21 @@ package android.os {
      method public abstract void binderDied();
    }
  
 +  public abstract interface IDroidCCService implements android.os.IInterface {
 +    method public abstract boolean checkPermission(java.lang.String, int) throws android.os.RemoteException;
 +    method public abstract void clearView(int, int) throws android.os.RemoteException;
++    method public abstract void setPermission(java.lang.String, java.lang.String, boolean) throws android.os.RemoteException;
 +    method public abstract void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +    method public abstract void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
 +  }
@@ -147,7 +151,7 @@ index 3c88e59..40b7233 100644
    public abstract interface IInterface {
      method public abstract android.os.IBinder asBinder();
    }
-@@ -38358,6 +38381,7 @@ package android.view {
+@@ -38358,6 +38383,7 @@ package android.view {
      method public int getVerticalFadingEdgeLength();
      method public int getVerticalScrollbarPosition();
      method public int getVerticalScrollbarWidth();
@@ -155,7 +159,7 @@ index 3c88e59..40b7233 100644
      method public android.view.ViewTreeObserver getViewTreeObserver();
      method public int getVisibility();
      method public final int getWidth();
-@@ -38522,6 +38546,7 @@ package android.view {
+@@ -38522,6 +38548,7 @@ package android.view {
      method public void scrollTo(int, int);
      method public void sendAccessibilityEvent(int);
      method public void sendAccessibilityEventUnchecked(android.view.accessibility.AccessibilityEvent);
@@ -165,10 +169,10 @@ index 3c88e59..40b7233 100644
      method public void setAccessibilityTraversalAfter(int);
 diff --git a/core/java/android/app/DroidCCManager.java b/core/java/android/app/DroidCCManager.java
 new file mode 100644
-index 0000000..8252880
+index 0000000..3fd9ed1
 --- /dev/null
 +++ b/core/java/android/app/DroidCCManager.java
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,72 @@
 +package android.app;
 +
 +import android.annotation.SdkConstant;
@@ -231,6 +235,15 @@ index 0000000..8252880
 +            e.printStackTrace();
 +        }
 +    }
++
++    public void setPermission(String viewKey, String permission, boolean status) {
++        try {
++            mService.setPermission(viewKey, permission, status);
++        } catch(Exception e) {
++            Log.e("DroidCCManager", e.toString());
++            e.printStackTrace();
++        }
++    }
 +}
 \ No newline at end of file
 diff --git a/core/java/android/app/SystemServiceRegistry.java b/core/java/android/app/SystemServiceRegistry.java
@@ -276,10 +289,10 @@ index 758b6ff..ec2288e 100644
       * process and user ID running in the system.
 diff --git a/core/java/android/os/IDroidCCService.aidl b/core/java/android/os/IDroidCCService.aidl
 new file mode 100644
-index 0000000..79856e5
+index 0000000..fb55a97
 --- /dev/null
 +++ b/core/java/android/os/IDroidCCService.aidl
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,16 @@
 +// IDroidCCService.aidl
 +package android.os;
 +
@@ -294,6 +307,7 @@ index 0000000..79856e5
 +    void setViewBack(in List<String> idxList, in List<String> viewStrList);
 +    boolean checkPermission(String permission, int uid);
 +    void clearView(int uid, int pid);
++    void setPermission(String viewKey, String permission, boolean status);
 +}
 diff --git a/core/java/android/view/View.java b/core/java/android/view/View.java
 index dea004e..db8fa17 100644
@@ -570,10 +584,10 @@ index 42402eb..97df1bf 100644
                  // If delivering a new key event, make sure the window is
 diff --git a/services/core/java/com/android/server/DroidCCService.java b/services/core/java/com/android/server/DroidCCService.java
 new file mode 100644
-index 0000000..d37f6c1
+index 0000000..bb17c18
 --- /dev/null
 +++ b/services/core/java/com/android/server/DroidCCService.java
-@@ -0,0 +1,226 @@
+@@ -0,0 +1,257 @@
 +package com.android.server;
 +
 +import android.app.ActivityManager;
@@ -589,6 +603,8 @@ index 0000000..d37f6c1
 +import java.lang.*;
 +import java.util.HashMap;
 +import java.util.Map;
++import java.util.HashSet;
++import java.util.Set;
 +import java.util.List;
 +import java.util.ArrayList;
 +
@@ -604,6 +620,14 @@ index 0000000..d37f6c1
 +        mPackageName = packageName;
 +        mIdxListJoin = idxListJoin;
 +        mViewActionId = viewActionId;
++    }
++
++    public ViewKey(String viewKeyStr) {
++        String[] fields = viewKeyStr.split(";");
++        mActivityName = fields[0].substring("activity=".length());
++        mPackageName = fields[1].substring("package=".length());
++        mIdxListJoin = fields[2].substring("idx_list_join=".length());
++        mViewActionId = Integer.parseInt(fields[3].substring("view_action_id=".length()));
 +    }
 +
 +    public String toString() {
@@ -633,7 +657,7 @@ index 0000000..d37f6c1
 +    // the pid last touched uid's view belongs
 +    private static Map<String, Integer> mUidPidMap = new HashMap<>();
 +
-+    private static Map<ViewKey, List<String>> mViewPermMap = new HashMap<>();
++    private static Map<ViewKey, Set<String>> mViewPermMap = new HashMap<>();
 +    private static Map<String, List<String>> mNameForUidPermMap = new HashMap<>();
 +
 +    ViewKey mCurrView;
@@ -699,7 +723,7 @@ index 0000000..d37f6c1
 +     * Set mCurrView according to the view information
 +     * update mUidViewMap and mUidPidMap (pid <-> uid <-> view)
 +     * update mViewInfoMap accoriding to mCurrView (view <-> viewinfo)
-+     * generate a slot for view perm rules if there's none yet (view <-> permlist)
++     * generate a slot for view perm rules if there's none yet (view <-> permSet)
 +     * only "view" is static
 +     */
 +    private void setView(List<String> idxList, List<String> viewStrList, int viewActionId) {
@@ -720,7 +744,7 @@ index 0000000..d37f6c1
 +        mViewInfoMap.put(mCurrView, genViewInfo(idxList, viewStrList));
 +
 +        if (mViewPermMap.containsKey(mCurrView) == false) {
-+            mViewPermMap.put(mCurrView, new ArrayList<String>());
++            mViewPermMap.put(mCurrView, new HashSet<String>());
 +        }
 +    }
 +
@@ -782,8 +806,8 @@ index 0000000..d37f6c1
 +        if (uidViewKey == null) {
 +            // Permission requests when app starts up
 +            if (mNameForUidPermMap.containsKey(nameForUid)) {
-+                List<String> permList = mViewPermMap.get(uidViewKey);
-+                if (permList.contains(permission)) {
++                Set<String> permSet = mViewPermMap.get(uidViewKey);
++                if (permSet.contains(permission)) {
 +                    Log.d("DroidCCService: checkPermission: QUIET_NON_NULL_DENY", permission);
 +                    return false;
 +                }
@@ -791,13 +815,34 @@ index 0000000..d37f6c1
 +        } else {
 +            // Permission requests after UI events
 +            ViewInfo viewInfo = mViewInfoMap.get(uidViewKey);
-+            List<String> permList = mViewPermMap.get(uidViewKey);
-+            if (permList.contains(permission)) {
++            Set<String> permSet = mViewPermMap.get(uidViewKey);
++            if (permSet.contains(permission)) {
 +                Log.d("DroidCCService: checkPermission: UI_DENY", permission);
 +                return false;
 +            }
 +        }
 +        return true;
++    }
++
++    /*
++     * Set permission perm as status
++     * viewKey is generated from test results of DroidBot
++     */
++    @Override
++    public synchronized void setPermission(String viewKeyStr, String permission, boolean status) throws RemoteException {
++        ViewKey viewKey = new ViewKey(viewKeyStr);
++        if (mViewPermMap.containsKey(viewKey) == false) {
++            mViewPermMap.put(viewKey, new HashSet<String>());
++        }
++        Set<String> permSet = mViewPermMap.get(viewKey);
++        if (permSet.contains(permission) && !status) {
++            permSet.remove(permission);
++        } else if (!permSet.contains(permission) && status) {
++            permSet.add(permission);
++        }
++        Log.d("DroidCCService: setPermission: viewKeyStr", viewKeyStr);
++        Log.d("DroidCCService: setPermission: permName", permission);
++        Log.d("DroidCCService: setPermission: allow", Boolean.toString(status));
 +    }
 +}
 diff --git a/services/core/java/com/android/server/am/ActivityManagerService.java b/services/core/java/com/android/server/am/ActivityManagerService.java
