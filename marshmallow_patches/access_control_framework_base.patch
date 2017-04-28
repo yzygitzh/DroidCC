@@ -1,6 +1,6 @@
-From 20546bf298911798665b0e26578bb117f9680e3b Mon Sep 17 00:00:00 2001
+From 37547e960cb89b47e3255fbf379310a2d5f63737 Mon Sep 17 00:00:00 2001
 From: Ziyue Yang <yzylivezh@hotmail.com>
-Date: Fri, 28 Apr 2017 20:55:01 +0800
+Date: Fri, 28 Apr 2017 22:47:46 +0800
 Subject: [PATCH] access control patch
 
 ---
@@ -169,7 +169,7 @@ index 3c88e59..9bca6b5 100644
      method public void setAccessibilityTraversalAfter(int);
 diff --git a/core/java/android/app/DroidCCManager.java b/core/java/android/app/DroidCCManager.java
 new file mode 100644
-index 0000000..3fd9ed1
+index 0000000..d60f1a7
 --- /dev/null
 +++ b/core/java/android/app/DroidCCManager.java
 @@ -0,0 +1,72 @@
@@ -236,9 +236,9 @@ index 0000000..3fd9ed1
 +        }
 +    }
 +
-+    public void setPermission(String viewKey, String permission, boolean status) {
++    public void setPermission(String viewKeyStr, String permission, boolean status) {
 +        try {
-+            mService.setPermission(viewKey, permission, status);
++            mService.setPermission(viewKeyStr, permission, status);
 +        } catch(Exception e) {
 +            Log.e("DroidCCManager", e.toString());
 +            e.printStackTrace();
@@ -289,7 +289,7 @@ index 758b6ff..ec2288e 100644
       * process and user ID running in the system.
 diff --git a/core/java/android/os/IDroidCCService.aidl b/core/java/android/os/IDroidCCService.aidl
 new file mode 100644
-index 0000000..fb55a97
+index 0000000..e28f8bb
 --- /dev/null
 +++ b/core/java/android/os/IDroidCCService.aidl
 @@ -0,0 +1,16 @@
@@ -307,7 +307,7 @@ index 0000000..fb55a97
 +    void setViewBack(in List<String> idxList, in List<String> viewStrList);
 +    boolean checkPermission(String permission, int uid);
 +    void clearView(int uid, int pid);
-+    void setPermission(String viewKey, String permission, boolean status);
++    void setPermission(String viewKeyStr, String permission, boolean status);
 +}
 diff --git a/core/java/android/view/View.java b/core/java/android/view/View.java
 index dea004e..db8fa17 100644
