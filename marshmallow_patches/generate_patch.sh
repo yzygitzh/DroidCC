@@ -2,7 +2,7 @@
 
 FRAMEWORK_BASE="/mnt/data/aosp-latest/aosp/frameworks/base"
 SEPOLICY="/mnt/data/aosp-latest/aosp/external/sepolicy"
-PATCH_DIR="/home/yzy/2017_spring/DroidCC"
+PATCH_DIR="/home/yzy/2017_spring/DroidCC/marshmallow_patches"
 
 gen_patch () {
 	cd $1
