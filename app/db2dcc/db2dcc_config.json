@@ -1,0 +1,19 @@
+{
+    "droidbot_out_dir": "/mnt/EXT_volume/lab_data/PERUIM_upgrade/PERUIM_apps_droidbot_out/",
+    "output_dir": "/mnt/EXT_volume/lab_data/db2dcc_out/",
+    "pscout_path": "/mnt/EXT_volume/projects/DroidCC/app/db2dcc/mapping_5.1.1.csv",
+    "exclude_activities": [
+        "android/com.android.internal.app.ChooserActivity",
+        "android/com.android.internal.app.ResolverActivity",
+        "com.android.launcher/com.android.launcher2.Launcher",
+        "com.android.browser/.BrowserActivity",
+        "com.android.settings/.Settings",
+        "com.android.settings/.SubSettings",
+        "com.android.gallery/com.android.camera.ImageGallery",
+        "com.android.bluetooth/.opp.BluetoothOppBtEnableActivity",
+        "com.android.wallpaper.livepicker/.LiveWallpaperPreview",
+        "com.android.mms/.ui.ComposeMessageActivity",
+        "com.android.systemui/.recent.RecentsActivity",
+        "com.android.quicksearchbox/.SearchActivity"
+    ]
+}
