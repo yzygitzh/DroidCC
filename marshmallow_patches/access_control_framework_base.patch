@@ -1,24 +1,24 @@
-From 37547e960cb89b47e3255fbf379310a2d5f63737 Mon Sep 17 00:00:00 2001
+From 99e208dfa403b2e5d8ea827d3712e6f9990ef36d Mon Sep 17 00:00:00 2001
 From: Ziyue Yang <yzylivezh@hotmail.com>
-Date: Fri, 28 Apr 2017 22:47:46 +0800
+Date: Sun, 30 Apr 2017 15:04:50 +0800
 Subject: [PATCH] access control patch
 
 ---
  Android.mk                                         |   1 +
- api/current.txt                                    |  27 +++
- api/system-current.txt                             |  27 +++
- core/java/android/app/DroidCCManager.java          |  72 ++++++
+ api/current.txt                                    |  28 ++
+ api/system-current.txt                             |  28 ++
+ core/java/android/app/DroidCCManager.java          |  70 +++++
  core/java/android/app/SystemServiceRegistry.java   |  10 +
  core/java/android/content/Context.java             |   2 +
- core/java/android/os/IDroidCCService.aidl          |  16 ++
- core/java/android/view/View.java                   |  64 +++++
- core/java/android/view/ViewGroup.java              |  30 ++-
- core/java/android/view/ViewRootImpl.java           |  13 ++
- .../java/com/android/server/DroidCCService.java    | 257 +++++++++++++++++++++
+ core/java/android/os/IDroidCCService.aidl          |  20 ++
+ core/java/android/view/View.java                   |  69 +++++
+ core/java/android/view/ViewGroup.java              |  30 +-
+ core/java/android/view/ViewRootImpl.java           |  13 +
+ .../java/com/android/server/DroidCCService.java    | 328 +++++++++++++++++++++
  .../android/server/am/ActivityManagerService.java  |  10 +
  .../android/server/pm/PackageManagerService.java   |  35 ++-
  services/java/com/android/server/SystemServer.java |   8 +
- 14 files changed, 553 insertions(+), 19 deletions(-)
+ 14 files changed, 633 insertions(+), 19 deletions(-)
  create mode 100644 core/java/android/app/DroidCCManager.java
  create mode 100644 core/java/android/os/IDroidCCService.aidl
  create mode 100644 services/core/java/com/android/server/DroidCCService.java
@@ -36,10 +36,10 @@ index 99e0c46..9a73dd4 100644
  	core/java/android/os/IMessenger.aidl \
  	core/java/android/os/INetworkActivityListener.aidl \
 diff --git a/api/current.txt b/api/current.txt
-index d7fdb2d..345cf03 100644
+index d7fdb2d..1506fb8 100644
 --- a/api/current.txt
 +++ b/api/current.txt
-@@ -4187,6 +4187,15 @@ package android.app {
+@@ -4187,6 +4187,16 @@ package android.app {
      field public static final int VISIBILITY_VISIBLE_NOTIFY_ONLY_COMPLETION = 3; // 0x3
    }
  
@@ -47,15 +47,16 @@ index d7fdb2d..345cf03 100644
 +    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
 +    method public boolean checkPermission(java.lang.String, int);
 +    method public void clearView(int, int);
-+    method public void setPermission(java.lang.String, java.lang.String, boolean);
-+    method public void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
-+    method public void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
++    method public void setUIPermRule(java.lang.String, java.lang.String, java.lang.String, boolean);
++    method public void setViewBack(int[], java.lang.String[]);
++    method public void setViewTouch(int[], java.lang.String[]);
++    field protected static final java.lang.String DROIDCC_MANAGER_LOG_TAG = "DroidCCManager";
 +  }
 +
    public class ExpandableListActivity extends android.app.Activity implements android.widget.ExpandableListView.OnChildClickListener android.widget.ExpandableListView.OnGroupCollapseListener android.widget.ExpandableListView.OnGroupExpandListener android.view.View.OnCreateContextMenuListener {
      ctor public ExpandableListActivity();
      method public android.widget.ExpandableListAdapter getExpandableListAdapter();
-@@ -7745,6 +7754,7 @@ package android.content {
+@@ -7745,6 +7755,7 @@ package android.content {
      field public static final java.lang.String DEVICE_POLICY_SERVICE = "device_policy";
      field public static final java.lang.String DISPLAY_SERVICE = "display";
      field public static final java.lang.String DOWNLOAD_SERVICE = "download";
@@ -63,16 +64,16 @@ index d7fdb2d..345cf03 100644
      field public static final java.lang.String DROPBOX_SERVICE = "dropbox";
      field public static final java.lang.String FINGERPRINT_SERVICE = "fingerprint";
      field public static final java.lang.String INPUT_METHOD_SERVICE = "input_method";
-@@ -23084,6 +23094,21 @@ package android.os {
+@@ -23084,6 +23095,21 @@ package android.os {
      method public abstract void binderDied();
    }
  
 +  public abstract interface IDroidCCService implements android.os.IInterface {
 +    method public abstract boolean checkPermission(java.lang.String, int) throws android.os.RemoteException;
 +    method public abstract void clearView(int, int) throws android.os.RemoteException;
-+    method public abstract void setPermission(java.lang.String, java.lang.String, boolean) throws android.os.RemoteException;
-+    method public abstract void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
-+    method public abstract void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
++    method public abstract void setUIPermRule(java.lang.String, java.lang.String, java.lang.String, boolean) throws android.os.RemoteException;
++    method public abstract void setViewBack(int[], java.lang.String[]) throws android.os.RemoteException;
++    method public abstract void setViewTouch(int[], java.lang.String[]) throws android.os.RemoteException;
 +  }
 +
 +  public static abstract class IDroidCCService.Stub extends android.os.Binder implements android.os.IDroidCCService {
@@ -85,15 +86,15 @@ index d7fdb2d..345cf03 100644
    public abstract interface IInterface {
      method public abstract android.os.IBinder asBinder();
    }
-@@ -36066,6 +36091,7 @@ package android.view {
+@@ -36066,6 +36092,7 @@ package android.view {
      method public int getVerticalFadingEdgeLength();
      method public int getVerticalScrollbarPosition();
      method public int getVerticalScrollbarWidth();
-+    method public final void getViewHierarchyInfo(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
++    method public final void getViewGeoInfo(int[], java.lang.String[]);
      method public android.view.ViewTreeObserver getViewTreeObserver();
      method public int getVisibility();
      method public final int getWidth();
-@@ -36230,6 +36256,7 @@ package android.view {
+@@ -36230,6 +36257,7 @@ package android.view {
      method public void scrollTo(int, int);
      method public void sendAccessibilityEvent(int);
      method public void sendAccessibilityEventUnchecked(android.view.accessibility.AccessibilityEvent);
@@ -102,10 +103,10 @@ index d7fdb2d..345cf03 100644
      method public void setAccessibilityLiveRegion(int);
      method public void setAccessibilityTraversalAfter(int);
 diff --git a/api/system-current.txt b/api/system-current.txt
-index 3c88e59..9bca6b5 100644
+index 3c88e59..92f9881 100644
 --- a/api/system-current.txt
 +++ b/api/system-current.txt
-@@ -4304,6 +4304,15 @@ package android.app {
+@@ -4304,6 +4304,16 @@ package android.app {
      field public static final int VISIBILITY_VISIBLE_NOTIFY_ONLY_COMPLETION = 3; // 0x3
    }
  
@@ -113,15 +114,16 @@ index 3c88e59..9bca6b5 100644
 +    ctor public DroidCCManager(android.content.Context, android.os.IDroidCCService);
 +    method public boolean checkPermission(java.lang.String, int);
 +    method public void clearView(int, int);
-+    method public void setPermission(java.lang.String, java.lang.String, boolean);
-+    method public void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
-+    method public void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
++    method public void setUIPermRule(java.lang.String, java.lang.String, java.lang.String, boolean);
++    method public void setViewBack(int[], java.lang.String[]);
++    method public void setViewTouch(int[], java.lang.String[]);
++    field protected static final java.lang.String DROIDCC_MANAGER_LOG_TAG = "DroidCCManager";
 +  }
 +
    public class ExpandableListActivity extends android.app.Activity implements android.widget.ExpandableListView.OnChildClickListener android.widget.ExpandableListView.OnGroupCollapseListener android.widget.ExpandableListView.OnGroupExpandListener android.view.View.OnCreateContextMenuListener {
      ctor public ExpandableListActivity();
      method public android.widget.ExpandableListAdapter getExpandableListAdapter();
-@@ -7989,6 +7998,7 @@ package android.content {
+@@ -7989,6 +7999,7 @@ package android.content {
      field public static final java.lang.String DEVICE_POLICY_SERVICE = "device_policy";
      field public static final java.lang.String DISPLAY_SERVICE = "display";
      field public static final java.lang.String DOWNLOAD_SERVICE = "download";
@@ -129,16 +131,16 @@ index 3c88e59..9bca6b5 100644
      field public static final java.lang.String DROPBOX_SERVICE = "dropbox";
      field public static final java.lang.String FINGERPRINT_SERVICE = "fingerprint";
      field public static final java.lang.String HDMI_CONTROL_SERVICE = "hdmi_control";
-@@ -25028,6 +25038,21 @@ package android.os {
+@@ -25028,6 +25039,21 @@ package android.os {
      method public abstract void binderDied();
    }
  
 +  public abstract interface IDroidCCService implements android.os.IInterface {
 +    method public abstract boolean checkPermission(java.lang.String, int) throws android.os.RemoteException;
 +    method public abstract void clearView(int, int) throws android.os.RemoteException;
-+    method public abstract void setPermission(java.lang.String, java.lang.String, boolean) throws android.os.RemoteException;
-+    method public abstract void setViewBack(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
-+    method public abstract void setViewTouch(java.util.List<java.lang.String>, java.util.List<java.lang.String>) throws android.os.RemoteException;
++    method public abstract void setUIPermRule(java.lang.String, java.lang.String, java.lang.String, boolean) throws android.os.RemoteException;
++    method public abstract void setViewBack(int[], java.lang.String[]) throws android.os.RemoteException;
++    method public abstract void setViewTouch(int[], java.lang.String[]) throws android.os.RemoteException;
 +  }
 +
 +  public static abstract class IDroidCCService.Stub extends android.os.Binder implements android.os.IDroidCCService {
@@ -151,15 +153,15 @@ index 3c88e59..9bca6b5 100644
    public abstract interface IInterface {
      method public abstract android.os.IBinder asBinder();
    }
-@@ -38358,6 +38383,7 @@ package android.view {
+@@ -38358,6 +38384,7 @@ package android.view {
      method public int getVerticalFadingEdgeLength();
      method public int getVerticalScrollbarPosition();
      method public int getVerticalScrollbarWidth();
-+    method public final void getViewHierarchyInfo(java.util.List<java.lang.String>, java.util.List<java.lang.String>);
++    method public final void getViewGeoInfo(int[], java.lang.String[]);
      method public android.view.ViewTreeObserver getViewTreeObserver();
      method public int getVisibility();
      method public final int getWidth();
-@@ -38522,6 +38548,7 @@ package android.view {
+@@ -38522,6 +38549,7 @@ package android.view {
      method public void scrollTo(int, int);
      method public void sendAccessibilityEvent(int);
      method public void sendAccessibilityEventUnchecked(android.view.accessibility.AccessibilityEvent);
@@ -169,10 +171,10 @@ index 3c88e59..9bca6b5 100644
      method public void setAccessibilityTraversalAfter(int);
 diff --git a/core/java/android/app/DroidCCManager.java b/core/java/android/app/DroidCCManager.java
 new file mode 100644
-index 0000000..d60f1a7
+index 0000000..4236765
 --- /dev/null
 +++ b/core/java/android/app/DroidCCManager.java
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,70 @@
 +package android.app;
 +
 +import android.annotation.SdkConstant;
@@ -191,6 +193,7 @@ index 0000000..d60f1a7
 +import java.util.Map;
 +
 +public class DroidCCManager {
++    protected static final String DROIDCC_MANAGER_LOG_TAG = "DroidCCManager";
 +    IDroidCCService mService;
 +    Context mContext;
 +
@@ -199,30 +202,27 @@ index 0000000..d60f1a7
 +        mContext = ctx;
 +    }
 +
-+    public void setViewTouch(List<String> idxList, List<String> viewStrList) {
++    public void setViewTouch(int[] geoInfo, String[] resId) {
 +        try {
-+            mService.setViewTouch(idxList, viewStrList);
++            mService.setViewTouch(geoInfo, resId);
 +        } catch (Exception e) {
-+            Log.e("DroidCCManager", e.toString());
-+            e.printStackTrace();
++            Log.e(DROIDCC_MANAGER_LOG_TAG, "setViewTouch", e);
 +        }
 +    }
 +
-+    public void setViewBack(List<String> idxList, List<String> viewStrList) {
++    public void setViewBack(int[] geoInfo, String[] resId) {
 +        try {
-+            mService.setViewBack(idxList, viewStrList);
++            mService.setViewBack(geoInfo, resId);
 +        } catch (Exception e) {
-+            Log.e("DroidCCManager", e.toString());
-+            e.printStackTrace();
++            Log.e(DROIDCC_MANAGER_LOG_TAG, "setViewBack", e);
 +        }
 +    }
 +
 +    public boolean checkPermission(String permission, int uid){
 +        try {
 +            return mService.checkPermission(permission, uid);
-+        } catch(Exception e) {
-+            Log.e("DroidCCManager", e.toString());
-+            e.printStackTrace();
++        } catch (Exception e) {
++            Log.e(DROIDCC_MANAGER_LOG_TAG, "checkPermission", e);
 +        }
 +        return true;
 +    }
@@ -231,16 +231,16 @@ index 0000000..d60f1a7
 +        try {
 +            mService.clearView(uid, pid);
 +        } catch(Exception e) {
-+            Log.e("DroidCCManager", e.toString());
++            Log.e(DROIDCC_MANAGER_LOG_TAG, "clearView", e);
 +            e.printStackTrace();
 +        }
 +    }
 +
-+    public void setPermission(String viewKeyStr, String permission, boolean status) {
++    public void setUIPermRule(String viewContextStr, String viewInfoStr, String permission, boolean status) {
 +        try {
-+            mService.setPermission(viewKeyStr, permission, status);
-+        } catch(Exception e) {
-+            Log.e("DroidCCManager", e.toString());
++            mService.setUIPermRule(viewContextStr, viewInfoStr, permission, status);
++        } catch (Exception e) {
++            Log.e(DROIDCC_MANAGER_LOG_TAG, "setPermission", e);
 +            e.printStackTrace();
 +        }
 +    }
@@ -289,10 +289,10 @@ index 758b6ff..ec2288e 100644
       * process and user ID running in the system.
 diff --git a/core/java/android/os/IDroidCCService.aidl b/core/java/android/os/IDroidCCService.aidl
 new file mode 100644
-index 0000000..e28f8bb
+index 0000000..bd0566c
 --- /dev/null
 +++ b/core/java/android/os/IDroidCCService.aidl
-@@ -0,0 +1,16 @@
+@@ -0,0 +1,20 @@
 +// IDroidCCService.aidl
 +package android.os;
 +
@@ -303,14 +303,18 @@ index 0000000..e28f8bb
 +     * Demonstrates some basic types that you can use as parameters
 +     * and return values in AIDL.
 +     */
-+    void setViewTouch(in List<String> idxList, in List<String> viewStrList);
-+    void setViewBack(in List<String> idxList, in List<String> viewStrList);
++
++    // int[]: screenX, screenY, thisWidth, thisHeight, rootWidth, rootHeight
++    // String[]: thisResId, rootResId
++    void setViewTouch(in int[] geoInfo, in String[] resId);
++    void setViewBack(in int[] geoInfo, in String[] resId);
++
 +    boolean checkPermission(String permission, int uid);
 +    void clearView(int uid, int pid);
-+    void setPermission(String viewKeyStr, String permission, boolean status);
++    void setUIPermRule(String viewContextStr, String viewInfoStr, String permission, boolean status);
 +}
 diff --git a/core/java/android/view/View.java b/core/java/android/view/View.java
-index dea004e..db8fa17 100644
+index dea004e..9a13ad8 100644
 --- a/core/java/android/view/View.java
 +++ b/core/java/android/view/View.java
 @@ -29,6 +29,7 @@ import android.annotation.NonNull;
@@ -371,7 +375,7 @@ index dea004e..db8fa17 100644
              return dispatchTouchEvent(event);
          } else {
              return dispatchGenericMotionEvent(event);
-@@ -18087,6 +18103,54 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
+@@ -18087,6 +18103,59 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      }
  
      /**
@@ -382,20 +386,26 @@ index dea004e..db8fa17 100644
 +     *
 +     * @return the list of view index from root.
 +     */
-+    public final void getViewHierarchyInfo(List<String> idxList, List<String> viewStrList) {
-+        View parent = this;
-+        View child;
++    public final void getViewGeoInfo(int[] geoInfo, String[] resId) {
++        int[] windowLocation = getLocationOnScreen();
++        geoInfo[0] = windowLocation[0];
++        geoInfo[1] = windowLocation[1];
++        geoInfo[2] = getWidth();
++        geoInfo[3] = getHeight();
++        geoInfo[4] = getRootView().getWidth();
++        geoInfo[5] = getRootView().getHeight();
 +
-+        idxList.add(Integer.toString(-1));
-+        viewStrList.add(this.toString());
-+
-+        while (parent.mParent != null && parent.mParent instanceof View) {
-+            child = (View) parent;
-+            parent = (View) parent.mParent;
-+            if (parent instanceof ViewGroup) {
-+                idxList.add(Integer.toString(((ViewGroup) parent).indexOfChild(child)));
-+                viewStrList.add(parent.toString());
-+            }
++        resId[0] = "";
++        resId[1] = "";
++        try {
++            resId[0] = getResources().getResourceName(getId());
++        } catch (Exception e) {
++            Log.e(VIEW_LOG_TAG, "getViewGeoInfo", e);
++        }
++        try {
++            resId[1] = getResources().getResourceName(getRootView().getId());
++        } catch (Exception e) {
++            Log.e(VIEW_LOG_TAG, "getViewGeoInfo", e);
 +        }
 +    }
 +
@@ -408,17 +418,16 @@ index dea004e..db8fa17 100644
 +        // taking use of the final method
 +        try {
 +            DroidCCManager dcm = (DroidCCManager) mContext.getSystemService("droid_cc");
-+            List<String> idxList = new ArrayList<>();
-+            List<String> viewStrList = new ArrayList<>();
-+            getViewHierarchyInfo(idxList, viewStrList);
++            int[] geoInfo = new int[6];
++            String[] resId = new String[2];
++            getViewGeoInfo(geoInfo, resId);
 +            if (msgType.equals("TOUCH")) {
-+                dcm.setViewTouch(idxList, viewStrList);
++                dcm.setViewTouch(geoInfo, resId);
 +            } else if (msgType.equals("BACK")) {
-+                dcm.setViewBack(idxList, viewStrList);
++                dcm.setViewBack(geoInfo, resId);
 +            }
 +        } catch (Exception e) {
-+            Log.e("View: DroidCC: ", e.toString());
-+            e.printStackTrace();
++            Log.e(VIEW_LOG_TAG, "sendDroidCCViewInfo", e);
 +        }
 +    }
 +
@@ -584,10 +593,10 @@ index 42402eb..97df1bf 100644
                  // If delivering a new key event, make sure the window is
 diff --git a/services/core/java/com/android/server/DroidCCService.java b/services/core/java/com/android/server/DroidCCService.java
 new file mode 100644
-index 0000000..bb17c18
+index 0000000..a3cd36b
 --- /dev/null
 +++ b/services/core/java/com/android/server/DroidCCService.java
-@@ -0,0 +1,257 @@
+@@ -0,0 +1,328 @@
 +package com.android.server;
 +
 +import android.app.ActivityManager;
@@ -609,42 +618,109 @@ index 0000000..bb17c18
 +import java.util.ArrayList;
 +
 +// transition key: should keep same in a single device
-+class ViewKey {
++class ViewContext {
 +    String mActivityName;
 +    String mPackageName;
-+    String mIdxListJoin;
 +    int mViewActionId;
 +
-+    public ViewKey(String activityName, String packageName, String idxListJoin, int viewActionId) {
++    public ViewContext(String activityName, String packageName, int viewActionId) {
 +        mActivityName = activityName;
 +        mPackageName = packageName;
-+        mIdxListJoin = idxListJoin;
 +        mViewActionId = viewActionId;
 +    }
 +
-+    public ViewKey(String viewKeyStr) {
-+        String[] fields = viewKeyStr.split(";");
++    public ViewContext(String viewContextStr) {
++        String[] fields = viewContextStr.split(";");
 +        mActivityName = fields[0].substring("activity=".length());
 +        mPackageName = fields[1].substring("package=".length());
-+        mIdxListJoin = fields[2].substring("idx_list_join=".length());
-+        mViewActionId = Integer.parseInt(fields[3].substring("view_action_id=".length()));
++        mViewActionId = Integer.parseInt(fields[2].substring("view_action_id=".length()));
 +    }
 +
++    @Override
 +    public String toString() {
 +        return "activity=" + mActivityName + ";package=" + mPackageName +
-+               ";idx_list_join=" + mIdxListJoin +
 +               ";view_action_id=" + Integer.toString(mViewActionId);
++    }
++
++    @Override
++    public boolean equals(Object o) {
++        if (this == o) return true;
++        if (o == null || getClass() != o.getClass()) return false;
++
++        String thisStr = toString();
++        String oString = o.toString();
++
++        return thisStr.equals(oString);
++    }
++
++    @Override
++    public int hashCode() {
++        return toString().hashCode();
 +    }
 +}
 +
 +// should keep same in a single device
 +class ViewInfo {
-+    List<Integer> mIdxList;
-+    List<String> mViewStrList;
++    int[] mGeoInfo;
++    String[] mResId;
 +
-+    public ViewInfo(List<Integer> idxList, List<String> viewStrList) {
-+        mIdxList = idxList;
-+        mViewStrList = viewStrList;
++    public ViewInfo(int[] geoInfo, String[] resId) {
++        mGeoInfo = geoInfo;
++        mResId = resId;
++    }
++
++    public ViewInfo(String viewInfoStr) {
++        String[] fields = viewInfoStr.split(";");
++        mGeoInfo = new int[6];
++        mResId = new String[2];
++        mGeoInfo[0] = Integer.parseInt(fields[0].substring("screenX:".length()));
++        mGeoInfo[1] = Integer.parseInt(fields[1].substring("screenY=".length()));
++        mGeoInfo[2] = Integer.parseInt(fields[2].substring("thisWidth=".length()));
++        mGeoInfo[3] = Integer.parseInt(fields[3].substring("thisHeight=".length()));
++        mGeoInfo[4] = Integer.parseInt(fields[4].substring("rootWidth=".length()));
++        mGeoInfo[5] = Integer.parseInt(fields[5].substring("rootHeight=".length()));
++        mResId[0] = fields[6].substring("thisResId=".length());
++        mResId[1] = fields[7].substring("rootResId=".length());
++    }
++
++    @Override
++    public String toString() {
++        return "screenX=" + Integer.toString(mGeoInfo[0]) +
++               ";screenY=" + Integer.toString(mGeoInfo[1]) +
++               ";thisWidth=" + Integer.toString(mGeoInfo[2]) +
++               ";thisHeight=" + Integer.toString(mGeoInfo[3]) +
++               ";rootWidth=" + Integer.toString(mGeoInfo[4]) +
++               ";rootHeight=" + Integer.toString(mGeoInfo[5]) +
++               ";thisResId=" + mResId[0] + ";rootResId=" + mResId[1];
++    }
++
++    @Override
++    public boolean equals(Object o) {
++        if (this == o) return true;
++        if (o == null || getClass() != o.getClass()) return false;
++
++        String thisStr = toString();
++        String oString = o.toString();
++
++        return thisStr.equals(oString);
++    }
++
++    @Override
++    public int hashCode() {
++        return toString().hashCode();
++    }
++
++    public boolean containsView(ViewInfo targetView) {
++        if (targetView == null) return false;
++
++        if (mGeoInfo[0] <= targetView.mGeoInfo[0] &&
++            mGeoInfo[1] <= targetView.mGeoInfo[1] &&
++            mGeoInfo[0] + mGeoInfo[2] >= targetView.mGeoInfo[0] + targetView.mGeoInfo[2] &&
++            mGeoInfo[1] + mGeoInfo[3] >= targetView.mGeoInfo[1] + targetView.mGeoInfo[3] &&
++            mGeoInfo[4] == targetView.mGeoInfo[4] &&
++            mGeoInfo[5] == targetView.mGeoInfo[5] &&
++            mResId[1].equals(targetView.mResId[1])) return true;
++        return false;
 +    }
 +}
 +
@@ -652,15 +728,15 @@ index 0000000..bb17c18
 +    public static final int VIEW_TOUCH = 0;
 +    public static final int VIEW_BACK = 1;
 +
-+    private static Map<String, ViewKey> mUidViewMap = new HashMap<>();
-+    private static Map<ViewKey, ViewInfo> mViewInfoMap = new HashMap<>();
++    private static Map<String, ViewContext> mUidViewMap = new HashMap<>();
++    private static Map<ViewContext, ViewInfo> mViewInfoMap = new HashMap<>();
 +    // the pid last touched uid's view belongs
 +    private static Map<String, Integer> mUidPidMap = new HashMap<>();
 +
-+    private static Map<ViewKey, Set<String>> mViewPermMap = new HashMap<>();
-+    private static Map<String, List<String>> mNameForUidPermMap = new HashMap<>();
++    private static Map<ViewContext, Map<ViewInfo, Set<String>>> mViewPermMap = new HashMap<>();
++    private static Map<String, Set<String>> mNameForUidPermMap = new HashMap<>();
 +
-+    ViewKey mCurrView;
++    ViewContext mCurrView;
 +    Context mContext;
 +
 +    public DroidCCService(Context context) {
@@ -671,20 +747,14 @@ index 0000000..bb17c18
 +     * Generate a unique key for identifying a View
 +     * contains activity name, package name and it's hierarchy path
 +     */
-+    private ViewKey genViewKey(List<String> idxList, int viewActionId) {
-+        String idxListJoin = "";
-+        for (String idx: idxList) {
-+            idxListJoin += "|" + idx;
-+        }
-+        idxListJoin = idxListJoin.substring(1);
-+
++    private ViewContext genViewContext(int viewActionId) {
 +        ActivityManager am = (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
 +        // TODO: deprecated method getRunningTask
 +        List<ActivityManager.RunningTaskInfo> taskInfo = am.getRunningTasks(1);
 +        String topActivityName = taskInfo.get(0).topActivity.getClassName();
 +        String packageName = taskInfo.get(0).topActivity.getPackageName();
 +
-+        return new ViewKey(topActivityName, packageName, idxListJoin, viewActionId);
++        return new ViewContext(topActivityName, packageName, viewActionId);
 +    }
 +
 +    /*
@@ -711,12 +781,8 @@ index 0000000..bb17c18
 +        return pm.getPackagesForUid(uid);
 +    }
 +
-+    private ViewInfo genViewInfo(List<String> idxList, List<String> viewStrList) {
-+        List<Integer> intIdxList = new ArrayList<>();
-+        for (String idx: idxList) {
-+            intIdxList.add(Integer.parseInt(idx));
-+        }
-+        return new ViewInfo(intIdxList, viewStrList);
++    private ViewInfo genViewInfo(int[] geoInfo, String[] resId) {
++        return new ViewInfo(geoInfo, resId);
 +    }
 +
 +    /*
@@ -726,7 +792,7 @@ index 0000000..bb17c18
 +     * generate a slot for view perm rules if there's none yet (view <-> permSet)
 +     * only "view" is static
 +     */
-+    private void setView(List<String> idxList, List<String> viewStrList, int viewActionId) {
++    private void setView(int[] geoInfo, String[] resId, int viewActionId) {
 +        String nameForUid = genNameForUid(Binder.getCallingUid());
 +        // nameForUid shouldn't be null for calls from android.view.View
 +        if (nameForUid == null) {
@@ -734,38 +800,37 @@ index 0000000..bb17c18
 +            return;
 +        }
 +
-+        mCurrView = genViewKey(idxList, viewActionId);
++        mCurrView = genViewContext(viewActionId);
 +        Log.d("DroidCCService: setView: mCurrView", mCurrView.toString());
-+        Log.d("DroidCCService: nameForUid", nameForUid);
-+        Log.d("DroidCCService: pid", Integer.toString(Binder.getCallingPid()));
++        Log.d("DroidCCService: setView: nameForUid", nameForUid);
++        Log.d("DroidCCService: setView: pid", Integer.toString(Binder.getCallingPid()));
 +
 +        mUidViewMap.put(nameForUid, mCurrView);
 +        mUidPidMap.put(nameForUid, Binder.getCallingPid());
-+        mViewInfoMap.put(mCurrView, genViewInfo(idxList, viewStrList));
 +
-+        if (mViewPermMap.containsKey(mCurrView) == false) {
-+            mViewPermMap.put(mCurrView, new HashSet<String>());
-+        }
++        ViewInfo viewInfo = genViewInfo(geoInfo, resId);
++        mViewInfoMap.put(mCurrView, viewInfo);
++        Log.d("DroidCCService: setView: viewInfo", viewInfo.toString());
 +    }
 +
 +    /*
 +     * Set mCurrView according to the view information WHEN TOUCHING
 +     */
 +    @Override
-+    public synchronized void setViewTouch(List<String> idxList, List<String> viewStrList) throws RemoteException {
-+        setView(idxList, viewStrList, VIEW_TOUCH);
++    public synchronized void setViewTouch(int[] geoInfo, String[] resId) throws RemoteException {
++        setView(geoInfo, resId, VIEW_TOUCH);
 +    }
 +
 +    /*
 +     * Set mCurrView according to the view information WHEN BACK BUTTON
 +     */
 +    @Override
-+    public synchronized void setViewBack(List<String> idxList, List<String> viewStrList) throws RemoteException {
-+        setView(idxList, viewStrList, VIEW_BACK);
++    public synchronized void setViewBack(int[] geoInfo, String[] resId) throws RemoteException {
++        setView(geoInfo, resId, VIEW_BACK);
 +    }
 +
 +    /*
-+     * Clear viewKey according to the <uid, pid> pair
++     * Clear viewContext according to the <uid, pid> pair
 +     * <uid, pid, view, viewinfo, perm> => <view, perm>
 +     */
 +    @Override
@@ -778,9 +843,9 @@ index 0000000..bb17c18
 +        }
 +        if (nameForUid != null && mUidViewMap.containsKey(nameForUid) &&
 +            mUidPidMap.containsKey(nameForUid) && mUidPidMap.get(nameForUid) == pid) {
-+            mViewInfoMap.put(mUidViewMap.get(nameForUid), null);
-+            mUidPidMap.put(nameForUid, null);
-+            mUidViewMap.put(nameForUid, null);
++            mViewInfoMap.remove(mUidViewMap.get(nameForUid));
++            mUidPidMap.remove(nameForUid);
++            mUidViewMap.remove(nameForUid);
 +            Log.d("DroidCCService: clearView", "killed");
 +        }
 +    }
@@ -799,26 +864,32 @@ index 0000000..bb17c18
 +        if (mUidViewMap.containsKey(nameForUid) == false) {
 +            // Permission request from uid showing up first time
 +            // and without any UI information
-+            mUidViewMap.put(nameForUid, null);
-+        }
-+
-+        ViewKey uidViewKey = mUidViewMap.get(nameForUid);
-+        if (uidViewKey == null) {
-+            // Permission requests when app starts up
++            // It's when app starts up
 +            if (mNameForUidPermMap.containsKey(nameForUid)) {
-+                Set<String> permSet = mViewPermMap.get(uidViewKey);
++                Set<String> permSet = mNameForUidPermMap.get(nameForUid);
++                Log.d("DroidCCService: checkPermission: QUIET", nameForUid);
 +                if (permSet.contains(permission)) {
-+                    Log.d("DroidCCService: checkPermission: QUIET_NON_NULL_DENY", permission);
++                    Log.d("DroidCCService: checkPermission: QUIET_DENY", permission);
 +                    return false;
 +                }
 +            }
 +        } else {
 +            // Permission requests after UI events
-+            ViewInfo viewInfo = mViewInfoMap.get(uidViewKey);
-+            Set<String> permSet = mViewPermMap.get(uidViewKey);
-+            if (permSet.contains(permission)) {
-+                Log.d("DroidCCService: checkPermission: UI_DENY", permission);
-+                return false;
++            ViewContext uidViewContext = mUidViewMap.get(nameForUid);
++
++            ViewInfo uidViewInfo = mViewInfoMap.get(uidViewContext);
++
++            if (mViewInfoMap.containsKey(uidViewContext) && mViewPermMap.containsKey(uidViewContext)) {
++                Map<ViewInfo, Set<String>> permMap = mViewPermMap.get(uidViewContext);
++                for (ViewInfo viewInfo : permMap.keySet()) {
++                    if (uidViewInfo.containsView(viewInfo)) {
++                        Set<String> permSet = permMap.get(viewInfo);
++                        if (permSet.contains(permission)) {
++                            Log.d("DroidCCService: checkPermission: UI_DENY", permission);
++                            return false;
++                        }
++                    }
++                }
 +            }
 +        }
 +        return true;
@@ -826,23 +897,32 @@ index 0000000..bb17c18
 +
 +    /*
 +     * Set permission perm as status
-+     * viewKey is generated from test results of DroidBot
++     * viewContext is generated from test results of DroidBot
 +     */
 +    @Override
-+    public synchronized void setPermission(String viewKeyStr, String permission, boolean status) throws RemoteException {
-+        ViewKey viewKey = new ViewKey(viewKeyStr);
-+        if (mViewPermMap.containsKey(viewKey) == false) {
-+            mViewPermMap.put(viewKey, new HashSet<String>());
++    public synchronized void setUIPermRule(String viewContextStr, String viewInfoStr, String permission, boolean status) throws RemoteException {
++        ViewContext viewContext = new ViewContext(viewContextStr);
++        ViewInfo viewInfo = new ViewInfo(viewInfoStr);
++
++        if (mViewPermMap.containsKey(viewContext) == false) {
++            mViewPermMap.put(viewContext, new HashMap<ViewInfo,Set<String>>());
 +        }
-+        Set<String> permSet = mViewPermMap.get(viewKey);
++        Map<ViewInfo, Set<String>> permMap = mViewPermMap.get(viewContext);
++        if (permMap.containsKey(viewInfo) == false) {
++            permMap.put(viewInfo, new HashSet<String>());
++        }
++        Set<String> permSet = permMap.get(viewInfo);
++
 +        if (permSet.contains(permission) && !status) {
 +            permSet.remove(permission);
 +        } else if (!permSet.contains(permission) && status) {
 +            permSet.add(permission);
 +        }
-+        Log.d("DroidCCService: setPermission: viewKeyStr", viewKeyStr);
-+        Log.d("DroidCCService: setPermission: permName", permission);
-+        Log.d("DroidCCService: setPermission: allow", Boolean.toString(status));
++
++        Log.d("DroidCCService: setUIPermRule: viewContextStr", viewContextStr);
++        Log.d("DroidCCService: setUIPermRule: viewInfoStr", viewInfoStr);
++        Log.d("DroidCCService: setUIPermRule: permName", permission);
++        Log.d("DroidCCService: setUIPermRule: deny", Boolean.toString(status));
 +    }
 +}
 diff --git a/services/core/java/com/android/server/am/ActivityManagerService.java b/services/core/java/com/android/server/am/ActivityManagerService.java
