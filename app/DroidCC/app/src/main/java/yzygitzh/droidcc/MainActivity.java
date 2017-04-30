@@ -19,7 +19,7 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
 
         dcm = (DroidCCManager) getSystemService("droid_cc");
-        String testViewKeyStr = "activity=A;package=P;idx_list_join=I;view_action_id=V";
+        String testViewKeyStr = "activity=A;package=P;idx_list_join=I;view_action_id=1";
         dcm.setPermission(testViewKeyStr, "TEST_PERMISSION", true);
         dcm.setPermission(testViewKeyStr, "TEST_PERMISSION", false);
 

@@ -19,7 +19,7 @@ public class DroidCCManager {
         return;
     }
 
-    public void setPermission(String viewKeyStr, String permission, boolean status) {
+    public void setPermission(String viewContextStr, String viewInfoStr, String permission, boolean status) {
         return;
     }
 }
