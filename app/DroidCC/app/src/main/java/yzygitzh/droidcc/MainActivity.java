@@ -19,9 +19,11 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
 
         dcm = (DroidCCManager) getSystemService("droid_cc");
-        String testViewKeyStr = "activity=A;package=P;idx_list_join=I;view_action_id=1";
-        dcm.setPermission(testViewKeyStr, "TEST_PERMISSION", true);
-        dcm.setPermission(testViewKeyStr, "TEST_PERMISSION", false);
+        String testViewContextStr = "activity=com.devexpert.weather.view.HomeActivity;package=com.devexpert.weather;view_action_id=0";
+        String testViewInfoStr = "screenX=12;screenY=170;thisWidth=146;thisHeight=23;rootWidth=320;rootHeight=480;thisResId=com.devexpert.weather:id/text_weather_home;rootResId=";
+        dcm.setUIPermRule(testViewContextStr, testViewInfoStr, "android.permission.INTERNET", true);
+        dcm.setUIPermRule(testViewContextStr, testViewInfoStr, "android.permission.ACCESS_FINE_LOCATION", true);
+        //dcm.setPermission(testViewContextStr, testViewInfoStr, "android.permission.INTERNET", false);
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
