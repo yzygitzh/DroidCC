@@ -1,6 +1,6 @@
-From 3a7e3fb1a7f27706de1e9c8d1704af92938ba9b4 Mon Sep 17 00:00:00 2001
+From c3d3765376fe618eddbd16d845384c2957911c6e Mon Sep 17 00:00:00 2001
 From: Ziyue Yang <yzylivezh@hotmail.com>
-Date: Mon, 1 May 2017 14:01:19 +0800
+Date: Mon, 1 May 2017 18:06:37 +0800
 Subject: [PATCH] access control patch
 
 ---
@@ -11,14 +11,14 @@ Subject: [PATCH] access control patch
  core/java/android/app/SystemServiceRegistry.java   |  10 +
  core/java/android/content/Context.java             |   2 +
  core/java/android/os/IDroidCCService.aidl          |  21 ++
- core/java/android/view/View.java                   |  66 +++++
+ core/java/android/view/View.java                   |  71 +++++
  core/java/android/view/ViewGroup.java              |  30 +-
  core/java/android/view/ViewRootImpl.java           |  13 +
  .../java/com/android/server/DroidCCService.java    | 318 +++++++++++++++++++++
  .../android/server/am/ActivityManagerService.java  |  10 +
  .../android/server/pm/PackageManagerService.java   |  35 ++-
  services/java/com/android/server/SystemServer.java |   8 +
- 14 files changed, 622 insertions(+), 19 deletions(-)
+ 14 files changed, 627 insertions(+), 19 deletions(-)
  create mode 100644 core/java/android/app/DroidCCManager.java
  create mode 100644 core/java/android/os/IDroidCCService.aidl
  create mode 100644 services/core/java/com/android/server/DroidCCService.java
@@ -316,7 +316,7 @@ index 0000000..147992a
 +    void setUIPermRule(String viewContextStr, String viewInfoStr, String permission, boolean status);
 +}
 diff --git a/core/java/android/view/View.java b/core/java/android/view/View.java
-index dea004e..d168b14 100644
+index dea004e..c101fd6 100644
 --- a/core/java/android/view/View.java
 +++ b/core/java/android/view/View.java
 @@ -29,6 +29,7 @@ import android.annotation.NonNull;
@@ -377,7 +377,7 @@ index dea004e..d168b14 100644
              return dispatchTouchEvent(event);
          } else {
              return dispatchGenericMotionEvent(event);
-@@ -18087,6 +18103,56 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
+@@ -18087,6 +18103,61 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      }
  
      /**
@@ -392,7 +392,12 @@ index dea004e..d168b14 100644
 +        viewRect[0] = new Rect();
 +        viewRect[1] = new Rect();
 +        getBoundsOnScreen(viewRect[0], true);
-+        getRootView().getBoundsOnScreen(viewRect[1], true);
++
++        View accessibilityRoot = this;
++        while (accessibilityRoot.getParentForAccessibility() instanceof View) {
++            accessibilityRoot = (View) accessibilityRoot.getParentForAccessibility();
++        }
++        accessibilityRoot.getBoundsOnScreen(viewRect[1], true);
 +
 +        resId[0] = "";
 +        resId[1] = "";
@@ -402,7 +407,7 @@ index dea004e..d168b14 100644
 +            Log.e(VIEW_LOG_TAG, "getViewGeoInfo", e);
 +        }
 +        try {
-+            resId[1] = getResources().getResourceName(getRootView().getId());
++            resId[1] = getResources().getResourceName(accessibilityRoot.getId());
 +        } catch (Exception e) {
 +            Log.e(VIEW_LOG_TAG, "getViewGeoInfo", e);
 +        }
