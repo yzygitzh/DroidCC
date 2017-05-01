@@ -20,7 +20,8 @@ public class MainActivity extends AppCompatActivity {
 
         dcm = (DroidCCManager) getSystemService("droid_cc");
         String testViewContextStr = "activity=com.devexpert.weather.view.HomeActivity;package=com.devexpert.weather;view_action_id=0";
-        String testViewInfoStr = "screenX=12;screenY=170;thisWidth=146;thisHeight=23;rootWidth=320;rootHeight=480;thisResId=com.devexpert.weather:id/text_weather_home;rootResId=";
+        //String testViewInfoStr = "screenX=12;screenY=170;thisWidth=146;thisHeight=23;rootWidth=320;rootHeight=480;thisResId=com.devexpert.weather:id/text_weather_home;rootResId=";
+        String testViewInfoStr = "thisRect=12 170 158 193;rootRect=0 0 320 480;thisResId=com.devexpert.weather:id/text_weather_home;rootResId=";
         dcm.setUIPermRule(testViewContextStr, testViewInfoStr, "android.permission.INTERNET", true);
         dcm.setUIPermRule(testViewContextStr, testViewInfoStr, "android.permission.ACCESS_FINE_LOCATION", true);
         //dcm.setPermission(testViewContextStr, testViewInfoStr, "android.permission.INTERNET", false);
