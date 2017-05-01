@@ -12,11 +12,13 @@ def load_pscout(pscout_path):
         next(pscout_file)
         reader = csv.reader(pscout_file)
         for row in reader:
-            method_key = "%s.%s %s" % (row[0], row[1], row[2])
+            method_key = "%s %s" % (row[1], row[2])
             if method_key not in pscout_map:
-                pscout_map[method_key] = []
-            pscout_map[method_key].append(row[3])
+                pscout_map[method_key] = set()
+            if row[3] != "Parent":
+                pscout_map[method_key].add(row[3])
     return pscout_map
+
 
 def collector_func(apk_data_path_list, output_path, exclude_activities, pscout_map):
     """
@@ -44,25 +46,34 @@ def collector_func(apk_data_path_list, output_path, exclude_activities, pscout_m
             return json_list
 
         def load_trace_perms(trace_path_list):
-            trace_perm_list = []
-            for trace_path in trace_path_list:
-                tmp_perm_list = []
-                with open(trace_path, "r") as trace_file:
-                    trace_lines = trace_file.readlines()
-                if len(trace_lines):
-                    line_idx = 0
-                    while trace_lines[line_idx].strip() != "*methods":
+            with open("%s/dumpsys_package_%s.txt" %
+                      (apk_data_path, apk_data_path.split("/")[-1])) as dumpsys_file:
+                dumpsys_lines = dumpsys_file.readlines()
+
+                granted_perms = set()
+                line_idx = len(dumpsys_lines) - 1
+                while dumpsys_lines[line_idx].strip() != "grantedPermissions:":
+                    granted_perms.add(dumpsys_lines[line_idx].strip())
+                    line_idx -= 1
+
+                trace_perm_list = []
+                for trace_path in trace_path_list:
+                    curr_perm_set = set()
+                    with open(trace_path, "r") as trace_file:
+                        trace_lines = trace_file.readlines()
+                    if len(trace_lines):
+                        line_idx = 0
+                        while trace_lines[line_idx].strip() != "*methods":
+                            line_idx += 1
                         line_idx += 1
-                    line_idx += 1
-                    while trace_lines[line_idx].strip() != "*end":
-                        fields = trace_lines[line_idx].split("\t")
-                        method_key = "%s.%s %s" % (fields[1], fields[2], fields[3])
-                        if method_key in pscout_map:
-                            tmp_perm_list += pscout_map[method_key]
-                        line_idx += 1
-                    print list(set(tmp_perm_list))
-                trace_perm_list.append(list(set(tmp_perm_list)))
-            return trace_perm_list
+                        while trace_lines[line_idx].strip() != "*end":
+                            fields = trace_lines[line_idx].split("\t")
+                            method_key = "%s %s" % (fields[2], fields[3])
+                            if method_key in pscout_map:
+                                curr_perm_set |= pscout_map[method_key] & granted_perms
+                            line_idx += 1
+                    trace_perm_list.append(curr_perm_set)
+                return trace_perm_list
 
         event_list = [os.path.join(dir_name, x)
                       for dir_name, _, files in os.walk("%s/events" % apk_data_path)
@@ -74,7 +85,7 @@ def collector_func(apk_data_path_list, output_path, exclude_activities, pscout_m
                       for dir_name, _, files in os.walk("%s/events" % apk_data_path)
                       for x in files if x.endswith(".trace")]
         trace_list.sort()
-        trace_list = load_trace_perms(trace_list)
+        trace_perm_list = load_trace_perms(trace_list)
 
         start_state_list = [os.path.join(dir_name, x)
                             for dir_name, _, files in os.walk("%s/states" % apk_data_path)
@@ -86,8 +97,6 @@ def collector_func(apk_data_path_list, output_path, exclude_activities, pscout_m
                            for dir_name, _, files in os.walk("%s/states" % apk_data_path)
                            for x in files if x.endswith(".png")]
         screenshot_list.sort()
-
-        print event_list[0]
 
 
 def run(config_json_path):
