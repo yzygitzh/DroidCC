@@ -1,5 +1,5 @@
 {
-    "droidbot_out_dir": "/mnt/EXT_volume/lab_data/PERUIM_upgrade/PERUIM_apps_droidbot_out/",
+    "droidbot_out_dir": "/mnt/EXT_volume/lab_data/PERUIM_upgrade/DroidCC_droidbot_out/",
     "output_dir": "/mnt/EXT_volume/lab_data/db2dcc_out/",
     "pscout_path": "/mnt/EXT_volume/projects/DroidCC/app/db2dcc/mapping_5.1.1.csv",
     "exclude_activities": [

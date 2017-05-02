@@ -85,28 +85,36 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
                     trace_perm_list.append(list(curr_perm_set))
                 return trace_perm_list
 
-        event_list = [os.path.join(dir_name, x)
-                      for dir_name, _, files in os.walk("%s/events" % apk_data_path)
-                      for x in files if x.endswith(".json")]
-        event_list.sort()
-        event_list = load_jsons(event_list)
+        event_path_pair = ("%s/events/event_" % apk_data_path, ".json")
+        trace_path_pair = ("%s/events/event_trace_" % apk_data_path, ".trace")
+        state_path_pair = ("%s/states/state_" % apk_data_path, ".json")
+        screenshot_path_pair = ("%s/states/screenshot_" % apk_data_path, ".png")
 
-        trace_list = [os.path.join(dir_name, x)
-                      for dir_name, _, files in os.walk("%s/events" % apk_data_path)
-                      for x in files if x.endswith(".trace")]
-        trace_list.sort()
-        trace_perm_list = load_trace_perms(trace_list)
+        event_tag_list = [x[len("event_"):-len(".json")]
+                          for x in os.walk("%s/events" % apk_data_path).next()[2]
+                          if x.endswith(".json")]
+        trace_tag_list = [x[len("event_trace_"):-len(".trace")]
+                          for x in os.walk("%s/events" % apk_data_path).next()[2]
+                          if x.endswith(".trace")]
+        state_tag_list = [x[len("state_"):-len(".json")]
+                          for x in os.walk("%s/states" % apk_data_path).next()[2]
+                          if x.endswith(".json")]
+        screenshot_tag_list = [x[len("screenshot_"):-len(".png")]
+                               for x in os.walk("%s/states" % apk_data_path).next()[2]
+                               if x.endswith(".png")]
 
-        start_state_list = [os.path.join(dir_name, x)
-                            for dir_name, _, files in os.walk("%s/states" % apk_data_path)
-                            for x in files if x.endswith(".json")]
-        start_state_list.sort()
-        start_state_list = load_jsons(start_state_list)
+        common_tags = list(set(event_tag_list) & set(trace_tag_list) &
+                           set(state_tag_list) & set(screenshot_tag_list))
+        common_tags.sort()
 
-        screenshot_list = [os.path.join(dir_name, x)
-                           for dir_name, _, files in os.walk("%s/states" % apk_data_path)
-                           for x in files if x.endswith(".png")]
-        screenshot_list.sort()
+        event_list = load_jsons(["%s%s%s" % (event_path_pair[0], x, event_path_pair[1])
+                                 for x in common_tags])
+        trace_perm_list = load_trace_perms(["%s%s%s" % (trace_path_pair[0], x, trace_path_pair[1])
+                                            for x in common_tags])
+        state_list = load_jsons(["%s%s%s" % (state_path_pair[0], x, state_path_pair[1])
+                                 for x in common_tags])
+        screenshot_list = ["%s%s%s" % (screenshot_tag_list[0], x, screenshot_tag_list[1])
+                           for x in common_tags]
 
         # start_perm_rule:
         # {"packageName": ..., "permission": []}
@@ -117,7 +125,7 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
         event_list = event_list[2:]
         trace_perm_list = trace_perm_list[1:]
 
-        for rule_tuple in zip(event_list, trace_perm_list, start_state_list, screenshot_list):
+        for rule_tuple in zip(event_list, trace_perm_list, state_list, screenshot_list):
             event = rule_tuple[0]
             trace_perm = rule_tuple[1]
             state = rule_tuple[2]
@@ -138,6 +146,11 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
                     if view["bounds"][0][0] <= x <= view["bounds"][1][0] and \
                        view["bounds"][0][1] <= y <= view["bounds"][1][1]:
                        # pre-order walking
+                       # a little smaller to get rid of 0.5 in Rect Java class...
+                        view["bounds"][0][0] += 2
+                        view["bounds"][0][1] += 2
+                        view["bounds"][1][0] -= 2
+                        view["bounds"][1][1] -= 2
                         this_view = view
                 if this_view is None:
                     continue
@@ -161,7 +174,8 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
                                          state["views"][0]["bounds"][1][0],
                                          state["views"][0]["bounds"][1][1])
             view_info_str = "thisRect=%s;rootRect=%s;thisResId=%s;rootResId=%s" % \
-                            (this_rect, root_rect, this_view["resource_id"], state["views"][0]["resource_id"])
+                            (this_rect, root_rect,
+                             this_view["resource_id"], state["views"][0]["resource_id"])
 
             if package_name not in ui_perm_rules:
                 ui_perm_rules[package_name] = {}
