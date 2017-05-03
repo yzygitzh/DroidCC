@@ -5,6 +5,8 @@ import csv
 import json
 import os
 
+from PIL import Image, ImageDraw
+
 
 def load_pscout(pscout_path):
     pscout_map = {}
@@ -36,6 +38,9 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
     """
     start_perm_rules = {}
     ui_perm_rules = {}
+
+    os.system("mkdir -p %s/perm_rules" % output_path)
+    os.system("mkdir -p %s/screenshots" % output_path)
 
     for apk_data_path in apk_data_path_list:
         # each trace tag corresponds to a start_state and end_state
@@ -113,17 +118,17 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
                                             for x in common_tags])
         state_list = load_jsons(["%s%s%s" % (state_path_pair[0], x, state_path_pair[1])
                                  for x in common_tags])
-        screenshot_list = ["%s%s%s" % (screenshot_tag_list[0], x, screenshot_tag_list[1])
+        screenshot_list = ["%s%s%s" % (screenshot_path_pair[0], x, screenshot_path_pair[1])
                            for x in common_tags]
 
         # start_perm_rule:
         # {"packageName": ..., "permission": []}
-        start_perm_rules[package_name] = list(trace_perm_list[0])
+        start_perm_rules[package_name] = load_trace_perms([
+            "%s%s%s" % (trace_path_pair[0], trace_tag_list[0], trace_path_pair[1])
+        ])[0]
 
         # UI_perm_rules:
         # {<viewContextStr>: {"viewInfoStr": ..., "permission": [], "screenshotPath": ...}}
-        event_list = event_list[2:]
-        trace_perm_list = trace_perm_list[1:]
 
         for rule_tuple in zip(event_list, trace_perm_list, state_list, screenshot_list):
             event = rule_tuple[0]
@@ -134,6 +139,11 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
             activity = state["foreground_activity"]
             if activity in exclude_activities:
                 continue
+            elif "/." in activity:
+                activity = activity.replace("/", "")
+            else:
+                activity = activity.split("/")[1]
+
             if not len(trace_perm):
                 continue
 
@@ -188,9 +198,34 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
                 "permission": trace_perm,
                 "screenshotPath": screenshot,
                 "event": event["tag"],
+                "bounds": this_view["bounds"]
             }
+        # output screenshots
+        for activity in ui_perm_rules[package_name]:
+            for view_ctx_str in ui_perm_rules[package_name][activity]:
+                for view_info_str in ui_perm_rules[package_name][activity][view_ctx_str]:
+                    view_info = ui_perm_rules[package_name][activity]\
+                                             [view_ctx_str][view_info_str]
+                    png_path = view_info["screenshotPath"]
+                    png_tag = view_info["event"]
+                    bounds = view_info["bounds"]
+                    im = Image.open(png_path)
+                    draw = ImageDraw.Draw(im)
+                    for i in range(-5, 5):
+                        draw.rectangle([
+                            bounds[0][0] - i, bounds[0][1] - i,
+                            bounds[1][0] + i, bounds[1][1] + i
+                        ], outline=(153, 204, 51, 255 + 10 * (i - 5)))
+                    del draw
+                    with open("%s/screenshots/%s.png" % (output_path, png_tag), "wb") as out_png_file:
+                        im.save(out_png_file)
 
-    return start_perm_rules, ui_perm_rules
+        # output perm rules
+        with open("%s/perm_rules/%s.json" % (output_path, package_name), "w") as output_file:
+            json.dump({
+                "start_perm_rules": start_perm_rules[package_name],
+                "ui_perm_rules": ui_perm_rules[package_name]
+            }, output_file, indent=2)
 
 
 def run(config_json_path):
@@ -207,12 +242,8 @@ def run(config_json_path):
     exclude_activities = config_json["exclude_activities"]
     apk_data_path_list = ["%s/%s" % (droidbot_out_path, x)
                           for x in os.walk(droidbot_out_path).next()[1]]
-    start_perm_rules, ui_perm_rules = assemble_perm_rules(apk_data_path_list,
-                                                          output_path,
-                                                          exclude_activities,
-                                                          pscout_map)
 
-    print json.dumps(ui_perm_rules, indent=2)
+    assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, pscout_map)
 
 
 def parse_args():
