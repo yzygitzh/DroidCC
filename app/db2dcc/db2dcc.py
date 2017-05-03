@@ -182,13 +182,13 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
             if activity not in ui_perm_rules[package_name]:
                 ui_perm_rules[package_name][activity] = {}
             if view_ctx_str not in ui_perm_rules[package_name][activity]:
-                ui_perm_rules[package_name][activity][view_ctx_str] = []
-            ui_perm_rules[package_name][activity][view_ctx_str].append({
+                ui_perm_rules[package_name][activity][view_ctx_str] = {}
+            ui_perm_rules[package_name][activity][view_ctx_str][view_info_str] = {
                 "viewInfoStr": view_info_str,
                 "permission": trace_perm,
                 "screenshotPath": screenshot,
                 "event": event["tag"],
-            })
+            }
 
     return start_perm_rules, ui_perm_rules
 
