@@ -1,4 +1,8 @@
 <resources>
     <string name="app_name">DroidCC</string>
     <string name="title_activity_main">DroidCC</string>
+    <string name="droidcc_service_success">DroidCC service connected.</string>
+    <string name="droidcc_service_fail">Failed to get DroidCC service.</string>
+    <string name="droidcc_permrules_path">/db2dcc_out/perm_rules</string>
+    <string name="droidcc_screenshot_path">/db2dcc_out/screenshots</string>
 </resources>

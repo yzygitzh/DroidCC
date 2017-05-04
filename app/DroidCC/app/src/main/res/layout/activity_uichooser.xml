@@ -4,15 +4,6 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    app:layout_behavior="@string/appbar_scrolling_view_behavior"
-    tools:context="yzygitzh.droidcc.MainActivity"
-    tools:showIn="@layout/activity_main">
-
-    <ListView
-        android:id="@+id/main_list_view"
-        android:layout_width="fill_parent"
-        android:layout_height="fill_parent"
-        android:layout_weight="1"
-        android:drawSelectorOnTop="false"/>
+    tools:context="yzygitzh.droidcc.UIChooser">
 
 </android.support.constraint.ConstraintLayout>
