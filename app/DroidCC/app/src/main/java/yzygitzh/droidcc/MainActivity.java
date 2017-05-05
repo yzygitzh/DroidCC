@@ -31,7 +31,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 super.run();
-                Utils.initUtils(activityCtx);
+                if (!Utils.initUtils(activityCtx)) return;
 
                 mMainListContents.clear();
                 for (String jsonFileName: Utils.getPermRules().keySet()) {
@@ -46,7 +46,7 @@ public class MainActivity extends AppCompatActivity {
                             public void onItemClick(AdapterView<?> adapter, View view, int position, long arg) {
                                 Intent appInfo = new Intent(activityCtx, UIChooserActivity.class);
                                 String jsonFileName = mMainListContents.get(position);
-                                appInfo.putExtra("title", jsonFileName);
+                                appInfo.putExtra(Utils.PACKAGE_NAME, jsonFileName);
                                 startActivity(appInfo);
                             }
                         });

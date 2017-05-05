@@ -28,6 +28,12 @@ public class Utils {
     private static DroidCCManager mDcm;
     private static Map<String, JSONObject> mPermRules;
 
+    public static final String UI_PERM_RULES = "ui_perm_rules";
+    public static final String START_PERM_RULES = "start_perm_rules";
+    public static final String PACKAGE_NAME = "packageName";
+    public static final String ACTIVITY_NAME = "activityName";
+
+
     public static boolean initUtils(Activity activityCtx) {
         if (mDcm == null ) mDcm = Utils.initDroidCC(activityCtx);
         if (mDcm == null) return false;

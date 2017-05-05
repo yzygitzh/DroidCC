@@ -28,7 +28,8 @@ public class UIChooserActivity extends AppCompatActivity {
         final Handler textHandler = new Handler();
         final Activity activityCtx = this;
 
-        mTitle = getIntent().getStringExtra("title");
+        mTitle = getIntent().getStringExtra(Utils.PACKAGE_NAME);
+        setTitle(mTitle);
         mUIListView = (ListView) findViewById(R.id.uichooser_ui_list_view);
         mStartListView = (ListView) findViewById(R.id.uichooser_start_list_view);
         mUIListAdaptor = new ArrayAdapter<>(this, R.layout.list_item_uichooser, R.id.list_content_uichooser, mUIListContents);
@@ -40,11 +41,10 @@ public class UIChooserActivity extends AppCompatActivity {
             @Override
             public void run() {
                 super.run();
-                Utils.initUtils(activityCtx);
 
                 mUIListContents.clear();
                 try {
-                    JSONObject UIPermRules = (JSONObject) Utils.getPermRules().get(mTitle).get("ui_perm_rules");
+                    JSONObject UIPermRules = (JSONObject) Utils.getPermRules().get(mTitle).get(Utils.UI_PERM_RULES);
                     Iterator<String> keyItr = UIPermRules.keys();
                     while (keyItr.hasNext()) mUIListContents.add(keyItr.next());
                 } catch (JSONException e) {
@@ -52,7 +52,7 @@ public class UIChooserActivity extends AppCompatActivity {
                 }
                 mStartListAdaptor.clear();
                 try {
-                    JSONArray perms = (JSONArray) Utils.getPermRules().get(mTitle).get("start_perm_rules");
+                    JSONArray perms = (JSONArray) Utils.getPermRules().get(mTitle).get(Utils.START_PERM_RULES);
                     for (int i = 0; i < perms.length(); i++) mStartListAdaptor.add(perms.getString(i));
                 } catch (JSONException e) {
                     e.printStackTrace();
@@ -67,8 +67,8 @@ public class UIChooserActivity extends AppCompatActivity {
                             public void onItemClick(AdapterView<?> adapter, View view, int position, long arg) {
                                 Intent appInfo = new Intent(activityCtx, PermRulesActivity.class);
                                 String activityName = mUIListContents.get(position);
-                                appInfo.putExtra("title", mTitle);
-                                appInfo.putExtra("activity", activityName);
+                                appInfo.putExtra(Utils.PACKAGE_NAME, mTitle);
+                                appInfo.putExtra(Utils.ACTIVITY_NAME, activityName);
                                 startActivity(appInfo);
                             }
                         });

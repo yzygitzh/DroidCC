@@ -190,35 +190,32 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
             if package_name not in ui_perm_rules:
                 ui_perm_rules[package_name] = {}
             if activity not in ui_perm_rules[package_name]:
-                ui_perm_rules[package_name][activity] = {}
-            if view_ctx_str not in ui_perm_rules[package_name][activity]:
-                ui_perm_rules[package_name][activity][view_ctx_str] = {}
-            ui_perm_rules[package_name][activity][view_ctx_str][view_info_str] = {
+                ui_perm_rules[package_name][activity] = []
+            ui_perm_rules[package_name][activity].append({
+                "viewCtxStr": view_ctx_str,
                 "viewInfoStr": view_info_str,
                 "permission": trace_perm,
                 "screenshotPath": screenshot,
-                "event": event["tag"],
+                "eventTag": event["tag"],
+                "eventType": "BACK" if "name" in event["event"] else "TOUCH",
                 "bounds": this_view["bounds"]
-            }
+            })
         # output screenshots
         for activity in ui_perm_rules[package_name]:
-            for view_ctx_str in ui_perm_rules[package_name][activity]:
-                for view_info_str in ui_perm_rules[package_name][activity][view_ctx_str]:
-                    view_info = ui_perm_rules[package_name][activity]\
-                                             [view_ctx_str][view_info_str]
-                    png_path = view_info["screenshotPath"]
-                    png_tag = view_info["event"]
-                    bounds = view_info["bounds"]
-                    im = Image.open(png_path)
-                    draw = ImageDraw.Draw(im)
-                    for i in range(-5, 5):
-                        draw.rectangle([
-                            bounds[0][0] - i, bounds[0][1] - i,
-                            bounds[1][0] + i, bounds[1][1] + i
-                        ], outline=(153, 204, 51, 255 + 10 * (i - 5)))
-                    del draw
-                    with open("%s/screenshots/%s.png" % (output_path, png_tag), "wb") as out_png_file:
-                        im.save(out_png_file)
+            for view_info in ui_perm_rules[package_name][activity]:
+                png_path = view_info.pop("screenshotPath")
+                png_tag = view_info["eventTag"]
+                bounds = view_info["bounds"]
+                im = Image.open(png_path)
+                draw = ImageDraw.Draw(im)
+                for i in range(-5, 5):
+                    draw.rectangle([
+                        bounds[0][0] - i, bounds[0][1] - i,
+                        bounds[1][0] + i, bounds[1][1] + i
+                    ], outline=(153, 204, 51, 255 + 10 * (i - 5)))
+                del draw
+                with open("%s/screenshots/%s.png" % (output_path, png_tag), "wb") as out_png_file:
+                    im.save(out_png_file)
 
         # output perm rules
         with open("%s/perm_rules/%s.json" % (output_path, package_name), "w") as output_file:

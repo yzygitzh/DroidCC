@@ -8,9 +8,18 @@
     android:paddingTop="@dimen/activity_vertical_margin"
     tools:context="yzygitzh.droidcc.PermRulesActivity$PlaceholderFragment">
 
-    <TextView
-        android:id="@+id/section_label"
+    <ImageView
+        android:id="@+id/permrules_image_view"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_centerHorizontal="true"/>
+
+    <ListView
+        android:id="@+id/permrules_list_view"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:drawSelectorOnTop="false"/>
 
 </RelativeLayout>
