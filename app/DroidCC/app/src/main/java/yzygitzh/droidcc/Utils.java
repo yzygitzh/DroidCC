@@ -14,8 +14,10 @@ import java.io.FileInputStream;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -23,21 +25,33 @@ import java.util.Map;
  */
 
 public class Utils {
-    public static void showMsg(View targetView, int strId) {
+    private static DroidCCManager mDcm;
+    private static Map<String, JSONObject> mPermRules;
+
+    public static boolean initUtils(Activity activityCtx) {
+        if (mDcm == null ) mDcm = Utils.initDroidCC(activityCtx);
+        if (mDcm == null) return false;
+        if (mPermRules == null) mPermRules = Utils.initPermRules(activityCtx);
+        if (mPermRules == null) return false;
+        return true;
+    }
+
+    public static Map<String, JSONObject> getPermRules() {
+        return mPermRules;
+    }
+
+    private static void showMsg(View targetView, int strId) {
         Snackbar.make(targetView, strId, Snackbar.LENGTH_SHORT).show();
     }
 
-    public static DroidCCManager initDroidCC(Activity activityCtx) {
+    private static DroidCCManager initDroidCC(Activity activityCtx) {
         DroidCCManager dcm = (DroidCCManager) activityCtx.getSystemService("droid_cc");
-        if (dcm == null) {
-            Utils.showMsg(activityCtx.findViewById(R.id.main_activity_layout), R.string.droidcc_service_fail);
-        } else {
-            Utils.showMsg(activityCtx.findViewById(R.id.main_activity_layout), R.string.droidcc_service_success);
-        }
+        if (dcm == null) Utils.showMsg(activityCtx.findViewById(R.id.main_activity_layout), R.string.droidcc_service_fail);
+        else Utils.showMsg(activityCtx.findViewById(R.id.main_activity_layout), R.string.droidcc_service_success);
         return dcm;
     }
 
-    public static Map<String, JSONObject> initPermRules(Activity activityCtx) {
+    private static Map<String, JSONObject> initPermRules(Activity activityCtx) {
         Map<String, JSONObject> retObj = new HashMap<>();
 
         File sdcardPath = Environment.getExternalStorageDirectory();

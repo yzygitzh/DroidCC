@@ -5,4 +5,9 @@
     <string name="droidcc_service_fail">Failed to get DroidCC service.</string>
     <string name="droidcc_permrules_path">/db2dcc_out/perm_rules</string>
     <string name="droidcc_screenshot_path">/db2dcc_out/screenshots</string>
+    <string name="uichooser_title_ui">UI Permission Rules</string>
+    <string name="uichooser_title_start">Start-up Permission Rules</string>
+    <string name="title_activity_perm_rules">PermRulesActivity</string>
+    <string name="action_settings">Settings</string>
+    <string name="section_format">Hello World from section: %1$d</string>
 </resources>

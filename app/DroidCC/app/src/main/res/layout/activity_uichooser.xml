@@ -4,6 +4,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="yzygitzh.droidcc.UIChooser">
+    tools:context="yzygitzh.droidcc.UIChooserActivity">
+
+    <include layout="@layout/content_uichooser" />
 
 </android.support.constraint.ConstraintLayout>
