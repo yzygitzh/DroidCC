@@ -3,6 +3,8 @@ package yzygitzh.droidcc;
 import android.app.Activity;
 import android.app.DroidCCManager;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Environment;
 import android.support.design.widget.Snackbar;
 import android.view.View;
@@ -32,6 +34,11 @@ public class Utils {
     public static final String START_PERM_RULES = "start_perm_rules";
     public static final String PACKAGE_NAME = "packageName";
     public static final String ACTIVITY_NAME = "activityName";
+    public static final String EVENT_TYPE = "eventType";
+    public static final String EVENT_TAG = "eventTag";
+    public static final String EVENT_BOUNDS = "bounds";
+    public static final String EVENT_VIEWCTXSTR = "viewCtxStr";
+    public static final String EVENT_VIEWINFOSTR = "viewInfoStr";
 
 
     public static boolean initUtils(Activity activityCtx) {
@@ -46,12 +53,22 @@ public class Utils {
         return mPermRules;
     }
 
+    public static Bitmap getImage(String imageTag, Activity activityCtx) {
+        File sdcardPath = Environment.getExternalStorageDirectory();
+        File screenShotDir = new File(sdcardPath.getAbsolutePath(), activityCtx.getResources().getString(R.string.droidcc_screenshot_path));
+        File imageFile = new File(screenShotDir, String.format("%s.png", imageTag));
+        if(imageFile.exists()){
+            return BitmapFactory.decodeFile(imageFile.getAbsolutePath());
+        }
+        return null;
+    }
+
     private static void showMsg(View targetView, int strId) {
         Snackbar.make(targetView, strId, Snackbar.LENGTH_SHORT).show();
     }
 
     private static DroidCCManager initDroidCC(Activity activityCtx) {
-        DroidCCManager dcm = (DroidCCManager) activityCtx.getSystemService("droid_cc");
+        DroidCCManager dcm = (DroidCCManager) activityCtx.getSystemService(activityCtx.getResources().getString(R.string.droidcc_service_name));
         if (dcm == null) Utils.showMsg(activityCtx.findViewById(R.id.main_activity_layout), R.string.droidcc_service_fail);
         else Utils.showMsg(activityCtx.findViewById(R.id.main_activity_layout), R.string.droidcc_service_success);
         return dcm;
@@ -62,7 +79,6 @@ public class Utils {
 
         File sdcardPath = Environment.getExternalStorageDirectory();
         File permRuleDir = new File(sdcardPath.getAbsolutePath(), activityCtx.getResources().getString(R.string.droidcc_permrules_path));
-        File screenShotDir = new File(sdcardPath.getAbsolutePath(), activityCtx.getResources().getString(R.string.droidcc_screenshot_path));
 
         File[] permRuleFiles = permRuleDir.listFiles();
         StringBuilder permRuleFileListStr = new StringBuilder();
