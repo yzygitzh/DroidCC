@@ -22,4 +22,16 @@ public class DroidCCManager {
     public void setUIPermRule(String viewContextStr, String viewInfoStr, String permission, boolean status) {
         return;
     }
+
+    public boolean getUIPermRuleStatus(String viewContextStr, String viewInfoStr, String permission) {
+        return true;
+    }
+
+    public void setStartPermRule(String packageName, String permission, boolean status) {
+        return;
+    }
+
+    public boolean getStartPermRuleStatus(String packageName, String permission) {
+        return true;
+    }
 }
