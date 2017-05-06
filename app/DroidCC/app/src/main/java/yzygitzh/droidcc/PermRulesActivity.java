@@ -68,8 +68,8 @@ public class PermRulesActivity extends AppCompatActivity {
         private ImageView mImageView;
 
         private ListView mListView;
-        private ArrayAdapter<String> mListAdaptor;
-        private List<String> mListContents = new ArrayList<>();
+        private ArrayAdapter<String> mListTextAdaptor;
+        private List<String> mListTextContents = new ArrayList<>();
 
         public PlaceholderFragment() {
         }
@@ -101,16 +101,16 @@ public class PermRulesActivity extends AppCompatActivity {
             mImageView = (ImageView) rootView.findViewById(R.id.permrules_image_view);
 
             mListView = (ListView) rootView.findViewById(R.id.permrules_list_view);
-            mListContents = new ArrayList<>();
-            mListAdaptor = new ArrayAdapter<>(getActivity(),
-                    R.layout.list_item_permrules, R.id.list_content_permrules, mListContents);
-            mListView.setAdapter(mListAdaptor);
+            mListTextContents = new ArrayList<>();
+            mListTextAdaptor = new ArrayAdapter<>(getActivity(),
+                    R.layout.list_item_permrules, R.id.list_content_permrule_text, mListTextContents);
+            mListView.setAdapter(mListTextAdaptor);
 
             new Thread() {
                 @Override
                 public void run() {
                     super.run();
-                    mListContents.clear();
+                    mListTextContents.clear();
                     try {
                         JSONObject UIPermRules = ((JSONObject) Utils.getPermRules()
                                 .get(getArguments().getString(Utils.PACKAGE_NAME))
@@ -120,7 +120,7 @@ public class PermRulesActivity extends AppCompatActivity {
 
                         JSONArray perms = UIPermRules.getJSONArray("permission");
                         for (int i = 0; i < perms.length(); i++)
-                            mListContents.add(perms.getString(i));
+                            mListTextContents.add(perms.getString(i));
 
                         final StringBuilder description = new StringBuilder();
                         description.append(String.format("Event Type: %s%n", UIPermRules.getString(Utils.EVENT_TYPE)));
@@ -138,7 +138,7 @@ public class PermRulesActivity extends AppCompatActivity {
 
                         textHandler.post(new Runnable() {
                             public void run() {
-                                mListAdaptor.notifyDataSetChanged();
+                                mListTextAdaptor.notifyDataSetChanged();
                                 mTextView.setText(description);
                                 mImageView.setImageBitmap(screenshot);
                             }

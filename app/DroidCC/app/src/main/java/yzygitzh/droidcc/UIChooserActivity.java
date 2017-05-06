@@ -20,8 +20,8 @@ import java.util.List;
 
 public class UIChooserActivity extends AppCompatActivity {
     private ListView mUIListView, mStartListView;
-    private ArrayAdapter<String> mUIListAdaptor, mStartListAdaptor;
-    private List<String> mUIListContents = new ArrayList<>(), mStartListContents = new ArrayList<>();
+    private ArrayAdapter<String> mUIListAdaptor, mStartListTextAdaptor;
+    private List<String> mUIListContents = new ArrayList<>(), mStartListTextContents = new ArrayList<>();
     private String mTitle;
 
     void initActivityList() {
@@ -30,12 +30,15 @@ public class UIChooserActivity extends AppCompatActivity {
 
         mTitle = getIntent().getStringExtra(Utils.PACKAGE_NAME);
         setTitle(mTitle);
+
         mUIListView = (ListView) findViewById(R.id.uichooser_ui_list_view);
         mStartListView = (ListView) findViewById(R.id.uichooser_start_list_view);
+
         mUIListAdaptor = new ArrayAdapter<>(this, R.layout.list_item_uichooser, R.id.list_content_uichooser, mUIListContents);
-        mStartListAdaptor = new ArrayAdapter<>(this, R.layout.list_item_uichooser, R.id.list_content_uichooser, mStartListContents);
+        mStartListTextAdaptor = new ArrayAdapter<>(this, R.layout.list_item_permrules, R.id.list_content_permrule_text, mStartListTextContents);
+
         mUIListView.setAdapter(mUIListAdaptor);
-        mStartListView.setAdapter(mStartListAdaptor);
+        mStartListView.setAdapter(mStartListTextAdaptor);
 
         new Thread() {
             @Override
@@ -50,10 +53,11 @@ public class UIChooserActivity extends AppCompatActivity {
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
-                mStartListAdaptor.clear();
+
+                mStartListTextContents.clear();
                 try {
                     JSONArray perms = (JSONArray) Utils.getPermRules().get(mTitle).get(Utils.START_PERM_RULES);
-                    for (int i = 0; i < perms.length(); i++) mStartListAdaptor.add(perms.getString(i));
+                    for (int i = 0; i < perms.length(); i++) mStartListTextAdaptor.add(perms.getString(i));
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -61,7 +65,7 @@ public class UIChooserActivity extends AppCompatActivity {
                 textHandler.post(new Runnable() {
                     public void run() {
                         mUIListAdaptor.notifyDataSetChanged();
-                        mStartListAdaptor.notifyDataSetChanged();
+                        mStartListTextAdaptor.notifyDataSetChanged();
                         mUIListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
                             @Override
                             public void onItemClick(AdapterView<?> adapter, View view, int position, long arg) {

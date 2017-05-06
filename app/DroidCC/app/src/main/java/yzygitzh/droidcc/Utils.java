@@ -6,7 +6,9 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Environment;
+import android.support.annotation.BoolRes;
 import android.support.design.widget.Snackbar;
+import android.util.Log;
 import android.view.View;
 
 import org.json.JSONObject;
@@ -46,6 +48,20 @@ public class Utils {
         if (mDcm == null) return false;
         if (mPermRules == null) mPermRules = Utils.initPermRules(activityCtx);
         if (mPermRules == null) return false;
+
+        /*
+        String testViewContextStr = "activity=com.devexpert.weather.view.HomeActivity;package=com.devexpert.weather;view_action_id=0";
+        String testViewInfoStr = "thisRect=200 449 210 491;rootRect=0 0 768 1280;thisResId=com.devexpert.weather:id/text_mylocation_home;rootResId=";
+
+        mDcm.setUIPermRule(testViewContextStr, testViewInfoStr, "android.permission.INTERNET", true);
+        mDcm.setStartPermRule("com.devexpert.weather", "android.permission.INTERNET", false);
+
+        boolean UIResult = mDcm.getUIPermRuleStatus(testViewContextStr, testViewInfoStr, "android.permission.INTERNET");
+        Log.d("DroidCCUtils: UI", Boolean.toString(UIResult));
+        boolean startResult = mDcm.getStartPermRuleStatus("com.devexpert.weather", "android.permission.INTERNET");
+        Log.d("DroidCCUtils: Start", Boolean.toString(startResult));
+        */
+
         return true;
     }
 

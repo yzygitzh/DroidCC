@@ -66,12 +66,6 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
 
         initPackageList();
-        /*
-        String testViewContextStr = "activity=com.devexpert.weather.view.HomeActivity;package=com.devexpert.weather;view_action_id=0";
-        String testViewInfoStr = "thisRect=200 449 210 491;rootRect=0 0 768 1280;thisResId=com.devexpert.weather:id/text_mylocation_home;rootResId=";
-        mDcm.setUIPermRule(testViewContextStr, testViewInfoStr, "android.permission.INTERNET", true);
-        mDcm.setUIPermRule(testViewContextStr, testViewInfoStr, "android.permission.ACCESS_FINE_LOCATION", true);
-        */
     }
 
 }
