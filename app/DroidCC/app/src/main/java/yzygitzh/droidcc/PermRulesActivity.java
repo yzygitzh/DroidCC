@@ -104,22 +104,26 @@ public class PermRulesActivity extends AppCompatActivity {
                     super.run();
                     mListContents.clear();
                     try {
-                        JSONObject UIPermRules = ((JSONObject) Utils.getPermRules()
+                        JSONObject UIPermRule = ((JSONObject) Utils.getPermRules()
                                 .get(getArguments().getString(Utils.PACKAGE_NAME))
                                 .get(Utils.UI_PERM_RULES))
                                 .getJSONArray(getArguments().getString(Utils.ACTIVITY_NAME))
                                 .getJSONObject(getArguments().getInt(SECTION_NUMBER));
 
-                        JSONArray perms = UIPermRules.getJSONArray("permission");
+                        JSONArray perms = UIPermRule.getJSONArray("permission");
                         for (int i = 0; i < perms.length(); i++) {
                             String permission = perms.getString(i);
                             boolean status = Utils.getStartPermRuleStatus(getArguments().getString(Utils.PACKAGE_NAME), permission);
-                            mListContents.add(new PermRuleContent(permission, status));
+                            mListContents.add(new PermRuleContent(
+                                    UIPermRule.getString(Utils.EVENT_VIEWCTXSTR),
+                                    UIPermRule.getString(Utils.EVENT_VIEWINFOSTR),
+                                    permission
+                            ));
                         }
                         final StringBuilder description = new StringBuilder();
-                        description.append(String.format("Event Type: %s%n", UIPermRules.getString(Utils.EVENT_TYPE)));
-                        description.append(String.format("Tag: %s%n", UIPermRules.getString(Utils.EVENT_TAG)));
-                        JSONArray bounds = UIPermRules.getJSONArray(Utils.EVENT_BOUNDS);
+                        description.append(String.format("Event Type: %s%n", UIPermRule.getString(Utils.EVENT_TYPE)));
+                        description.append(String.format("Tag: %s%n", UIPermRule.getString(Utils.EVENT_TAG)));
+                        JSONArray bounds = UIPermRule.getJSONArray(Utils.EVENT_BOUNDS);
                         description.append(String.format("Bounds: %d, %d, %d, %d%n",
                                 ((JSONArray)bounds.get(0)).getInt(0),
                                 ((JSONArray)bounds.get(0)).getInt(1),
@@ -128,7 +132,7 @@ public class PermRulesActivity extends AppCompatActivity {
                         description.append(String.format("Rules: %d / %d",
                                 getArguments().getInt(SECTION_NUMBER) + 1, getArguments().getInt(TOTAL_SECTION_NUMBER)));
 
-                        final Bitmap screenshot = Utils.getImage(UIPermRules.getString(Utils.EVENT_TAG), getActivity());
+                        final Bitmap screenshot = Utils.getImage(UIPermRule.getString(Utils.EVENT_TAG), getActivity());
 
                         textHandler.post(new Runnable() {
                             public void run() {

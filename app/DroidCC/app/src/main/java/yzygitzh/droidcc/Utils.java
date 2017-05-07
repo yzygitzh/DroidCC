@@ -85,6 +85,21 @@ public class Utils {
         return mDcm.getStartPermRuleStatus(packageName, permission);
     }
 
+    public static void setStartPermRuleStatus(String packageName, String permission, boolean status) {
+        if (mDcm == null) return;
+        mDcm.setStartPermRule(packageName, permission, status);
+    }
+
+    public static boolean getUIPermRuleStatus(String viewCtxStr, String viewInfoStr, String permission) {
+        if (mDcm == null) return false;
+        return mDcm.getUIPermRuleStatus(viewCtxStr, viewInfoStr, permission);
+    }
+
+    public static void setUIPermRuleStatus(String viewCtxStr, String viewInfoStr, String permission, boolean status) {
+        if (mDcm == null) return;
+        mDcm.setUIPermRule(viewCtxStr, viewInfoStr, permission, status);
+    }
+
     private static void showMsg(View targetView, int strId) {
         Snackbar.make(targetView, strId, Snackbar.LENGTH_SHORT).show();
     }

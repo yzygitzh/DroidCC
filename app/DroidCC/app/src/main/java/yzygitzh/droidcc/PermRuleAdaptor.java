@@ -4,6 +4,7 @@ import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -49,8 +50,8 @@ public class PermRuleAdaptor extends BaseAdapter {
 
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
-        ViewHolder holder = null;
-        if (convertView==null) {
+        ViewHolder holder;
+        if (convertView == null) {
             convertView = mInflater.inflate(R.layout.list_item_permrules, null);
             holder = new ViewHolder(
                     (TextView) convertView.findViewById(R.id.list_content_permrule_text),
@@ -60,9 +61,15 @@ public class PermRuleAdaptor extends BaseAdapter {
         } else {
             holder = (ViewHolder) convertView.getTag();
         }
-        PermRuleContent content = (PermRuleContent) getItem(position);
+        final PermRuleContent content = (PermRuleContent) getItem(position);
         holder.mTextView.setText(content.getPermName());
         holder.mSwitchView.setChecked(content.getStatus());
+        holder.mSwitchView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                content.setStatus(!content.getStatus());
+            }
+        });
         return convertView;
     }
 }

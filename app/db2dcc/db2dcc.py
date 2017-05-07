@@ -156,11 +156,6 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
                     if view["bounds"][0][0] <= x <= view["bounds"][1][0] and \
                        view["bounds"][0][1] <= y <= view["bounds"][1][1]:
                        # pre-order walking
-                       # a little smaller to get rid of 0.5 in Rect Java class...
-                        view["bounds"][0][0] += 2
-                        view["bounds"][0][1] += 2
-                        view["bounds"][1][0] -= 2
-                        view["bounds"][1][1] -= 2
                         this_view = view
                 if this_view is None:
                     continue
@@ -175,10 +170,11 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
             else:
                 continue
 
-            this_rect = "%d %d %d %d" % (this_view["bounds"][0][0],
-                                         this_view["bounds"][0][1],
-                                         this_view["bounds"][1][0],
-                                         this_view["bounds"][1][1])
+            # a little smaller to get rid of 0.5 in Rect Java class...
+            this_rect = "%d %d %d %d" % (this_view["bounds"][0][0] + 2,
+                                         this_view["bounds"][0][1] + 2,
+                                         this_view["bounds"][1][0] - 2,
+                                         this_view["bounds"][1][1] - 2)
             root_rect = "%d %d %d %d" % (state["views"][0]["bounds"][0][0],
                                          state["views"][0]["bounds"][0][1],
                                          state["views"][0]["bounds"][1][0],

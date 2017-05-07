@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -62,7 +63,7 @@ public class UIChooserActivity extends AppCompatActivity {
                     for (int i = 0; i < perms.length(); i++) {
                         String permission = perms.getString(i);
                         boolean status = Utils.getStartPermRuleStatus(packageName, permission);
-                        mStartListContents.add(new PermRuleContent(perms.getString(i), status));
+                        mStartListContents.add(new PermRuleContent(packageName, perms.getString(i)));
                     }
                 } catch (JSONException e) {
                     e.printStackTrace();
