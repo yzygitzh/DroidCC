@@ -1,6 +1,5 @@
 package yzygitzh.droidcc;
 
-import android.content.Intent;
 import android.graphics.Bitmap;
 import android.os.Handler;
 import android.support.v4.app.FragmentStatePagerAdapter;
@@ -9,15 +8,12 @@ import android.support.v7.widget.Toolbar;
 
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
-import android.support.v4.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ImageView;
 import android.widget.ListView;
@@ -28,19 +24,17 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 
 public class PermRulesActivity extends AppCompatActivity {
     private SectionsPagerAdapter mSectionsPagerAdapter;
 
     private ViewPager mViewPager;
-    private String mTitle;
+    private String packageName;
 
     void initPermRulesList() {
-        mTitle = getIntent().getStringExtra(Utils.ACTIVITY_NAME);
-        setTitle(mTitle);
+        packageName = getIntent().getStringExtra(Utils.ACTIVITY_NAME);
+        setTitle(packageName);
     }
 
     @Override
@@ -68,8 +62,8 @@ public class PermRulesActivity extends AppCompatActivity {
         private ImageView mImageView;
 
         private ListView mListView;
-        private ArrayAdapter<String> mListTextAdaptor;
-        private List<String> mListTextContents = new ArrayList<>();
+        private PermRuleAdaptor mListAdaptor;
+        private List<PermRuleContent> mListContents = new ArrayList<>();
 
         public PlaceholderFragment() {
         }
@@ -101,16 +95,14 @@ public class PermRulesActivity extends AppCompatActivity {
             mImageView = (ImageView) rootView.findViewById(R.id.permrules_image_view);
 
             mListView = (ListView) rootView.findViewById(R.id.permrules_list_view);
-            mListTextContents = new ArrayList<>();
-            mListTextAdaptor = new ArrayAdapter<>(getActivity(),
-                    R.layout.list_item_permrules, R.id.list_content_permrule_text, mListTextContents);
-            mListView.setAdapter(mListTextAdaptor);
+            mListAdaptor = new PermRuleAdaptor(getActivity(), mListContents);
+            mListView.setAdapter(mListAdaptor);
 
             new Thread() {
                 @Override
                 public void run() {
                     super.run();
-                    mListTextContents.clear();
+                    mListContents.clear();
                     try {
                         JSONObject UIPermRules = ((JSONObject) Utils.getPermRules()
                                 .get(getArguments().getString(Utils.PACKAGE_NAME))
@@ -119,9 +111,11 @@ public class PermRulesActivity extends AppCompatActivity {
                                 .getJSONObject(getArguments().getInt(SECTION_NUMBER));
 
                         JSONArray perms = UIPermRules.getJSONArray("permission");
-                        for (int i = 0; i < perms.length(); i++)
-                            mListTextContents.add(perms.getString(i));
-
+                        for (int i = 0; i < perms.length(); i++) {
+                            String permission = perms.getString(i);
+                            boolean status = Utils.getStartPermRuleStatus(getArguments().getString(Utils.PACKAGE_NAME), permission);
+                            mListContents.add(new PermRuleContent(permission, status));
+                        }
                         final StringBuilder description = new StringBuilder();
                         description.append(String.format("Event Type: %s%n", UIPermRules.getString(Utils.EVENT_TYPE)));
                         description.append(String.format("Tag: %s%n", UIPermRules.getString(Utils.EVENT_TAG)));
@@ -138,7 +132,7 @@ public class PermRulesActivity extends AppCompatActivity {
 
                         textHandler.post(new Runnable() {
                             public void run() {
-                                mListTextAdaptor.notifyDataSetChanged();
+                                mListAdaptor.notifyDataSetChanged();
                                 mTextView.setText(description);
                                 mImageView.setImageBitmap(screenshot);
                             }

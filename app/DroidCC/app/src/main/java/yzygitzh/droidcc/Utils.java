@@ -6,10 +6,13 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Environment;
-import android.support.annotation.BoolRes;
 import android.support.design.widget.Snackbar;
-import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.BaseAdapter;
+import android.widget.Switch;
+import android.widget.TextView;
 
 import org.json.JSONObject;
 
@@ -18,9 +21,7 @@ import java.io.FileInputStream;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -79,6 +80,11 @@ public class Utils {
         return null;
     }
 
+    public static boolean getStartPermRuleStatus(String packageName, String permission) {
+        if (mDcm == null) return false;
+        return mDcm.getStartPermRuleStatus(packageName, permission);
+    }
+
     private static void showMsg(View targetView, int strId) {
         Snackbar.make(targetView, strId, Snackbar.LENGTH_SHORT).show();
     }
@@ -107,7 +113,9 @@ public class Utils {
                 String jsonStr = Charset.defaultCharset().decode(bb).toString();
 
                 JSONObject jsonObj = new JSONObject(jsonStr);
-                retObj.put(permRuleFile.getName(), jsonObj);
+                String permRuleFileName = permRuleFile.getName();
+                String packageName = permRuleFileName.substring(0, permRuleFileName.length() - ".json".length());
+                retObj.put(packageName, jsonObj);
             } catch (Exception e) {
                 e.printStackTrace();
             }
