@@ -1,28 +1,94 @@
 #coding=utf-8
 
 import argparse
-import csv
 import json
 import os
+import re
+import subprocess
 
 from PIL import Image, ImageDraw
 
 
-def load_pscout(pscout_path):
-    pscout_map = {}
-    with open(pscout_path, "r") as pscout_file:
-        next(pscout_file)
-        reader = csv.reader(pscout_file)
-        for row in reader:
-            method_key = "%s %s" % (row[1], row[2])
-            if method_key not in pscout_map:
-                pscout_map[method_key] = set()
-            if row[3] != "Parent":
-                pscout_map[method_key].add(row[3])
-    return pscout_map
+TRACE_VERSION_RE = re.compile(r"VERSION: ([0-9]+)")
+TRACE_NUM_RE = re.compile(r"Threads \(([0-9]+)\):")
+TRACE_ITEM_RE = re.compile(r"([0-9]+)[ \t]+(ent|xit|unr)(!*)[ \t]+([0-9]+)[ \-\+][\.]*([^ \t]+)[ \t]+([^ \t]+)[ \t]+([^ \t]+)")
 
 
-def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, pscout_map):
+def java_shorty2full(short_sig):
+    basic_type_mapping = {
+        "Z": "boolean",
+        "B": "byte",
+        "C": "char",
+        "S": "short",
+        "I": "int",
+        "J": "long",
+        "F": "float",
+        "D": "double",
+        "V": "void"
+    }
+    fields = short_sig.split()
+    idx = 1
+    array_depth = 0
+    parsed_paras = []
+    # while fields[1][idx] != ")":
+    while idx < len(fields[1]):
+        if fields[1][idx] == "L":
+            class_end_idx = idx
+            while fields[1][class_end_idx] != ";":
+                class_end_idx += 1
+            parsed_paras.append(fields[1][idx + 1:class_end_idx].replace("/", ".") + array_depth * "[]")
+            idx = class_end_idx
+            array_depth = 0
+        elif fields[1][idx] == "[":
+            array_depth += 1
+        elif fields[1][idx] != ")":
+            parsed_paras.append(basic_type_mapping[fields[1][idx]] + array_depth * "[]")
+            array_depth = 0
+        idx += 1
+    return fields[0] + "(%s)%s" % (",".join(parsed_paras[:-1]), parsed_paras[-1])
+
+
+def load_axplorer(axplorer_paths):
+    axplorer_map = {}
+    sdk_mapping_path = axplorer_paths["sdk"]
+    cp_mapping_path = axplorer_paths["cp"]
+
+    with open(sdk_mapping_path, "r") as sdk_mapping_file:
+        lines = sdk_mapping_file.read().splitlines()
+        for line in lines:
+            method_sig, perms = line.split("  ::  ")
+            perm_set = set(perms.split(", "))
+            if method_sig not in axplorer_map:
+                axplorer_map[method_sig] = set()
+            axplorer_map[method_sig] |= perm_set
+
+    with open(cp_mapping_path, "r") as cp_mapping_file:
+        lines = cp_mapping_file.read().splitlines()
+        for line in lines:
+            fields = line.split("  ")
+            perm = fields[-1]
+            if perm.startswith("["):
+                continue
+            method_sig = fields[0]
+            if method_sig not in axplorer_map:
+                axplorer_map[method_sig] = set()
+            axplorer_map[method_sig].add(perm)
+
+    return axplorer_map
+
+
+def match_axplorer_map(target_str, axplorer_map):
+    if target_str in axplorer_map:
+        return target_str
+    fields = target_str.split("(")
+    content_case_str = "%s(%s" % (".".join(fields[0].split(".")[:-1]),
+                                  fields[1])
+    if content_case_str in axplorer_map:
+        return content_case_str
+    return None
+
+
+def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, axplorer_map):
     """
     For each apk_data in apk_data_path_list,
     generate (viewContextStr, viewInfoStr, permission) tuples for each event.
@@ -36,9 +102,6 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
     return:
 
     """
-    start_perm_rules = {}
-    ui_perm_rules = {}
-
     os.system("mkdir -p %s/perm_rules" % output_path)
     os.system("mkdir -p %s/screenshots" % output_path)
 
@@ -50,6 +113,8 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
         # events      : [HOME_event, am start, back  , ...]
         # traces      :             [trace1  , trace2, ...]
         # start_state :                       [app   , ...]
+        start_perm_rules = {}
+        ui_perm_rules = {}
 
         package_name = apk_data_path.split("/")[-1]
         print(package_name)
@@ -76,23 +141,46 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
                     line_idx += 1
 
                 # TODO: filter background services
+                # each element in the list is a dict -> {(tid, tname): {"method", perm_set}}
                 trace_perm_list = []
                 for trace_path in trace_path_list:
-                    curr_perm_set = set()
-                    with open(trace_path, "rb") as trace_file:
-                        trace_lines = trace_file.readlines()
-                    if len(trace_lines):
-                        line_idx = 0
-                        while trace_lines[line_idx].strip() != b"*methods":
-                            line_idx += 1
-                        line_idx += 1
-                        while trace_lines[line_idx].strip() != b"*end":
-                            fields = trace_lines[line_idx].decode().split("\t")
-                            method_key = "%s %s" % (fields[2], fields[3])
-                            if method_key in pscout_map:
-                                curr_perm_set |= pscout_map[method_key] & granted_perms
-                            line_idx += 1
-                    trace_perm_list.append(list(curr_perm_set))
+                    p = subprocess.Popen(["dmtracedump", "-o", trace_path], stdout=subprocess.PIPE)
+                    trace_str = p.communicate()[0].decode()
+
+                    trace_lines = trace_str.split(os.linesep)
+                    if len(trace_lines) <= 1:
+                        continue
+
+                    idx = 1
+                    thread_num = int(TRACE_NUM_RE.match(trace_lines[idx]).groups()[0])
+                    idx += 1
+
+                    tid2tname = {}
+                    for i in range(thread_num):
+                        thread_name_start_idx = trace_lines[i + idx].find(" ") + 1
+                        tname = trace_lines[i + idx][thread_name_start_idx:]
+                        tid = int(trace_lines[i + idx][:thread_name_start_idx])
+                        tid2tname[tid] = tname
+                    idx += thread_num + 1
+
+                    trace_obj = {}
+                    while len(trace_lines[idx]):
+                        line_info = TRACE_ITEM_RE.match(trace_lines[idx]).groups()
+                        tid = int(line_info[0])
+
+                        method_record = "%s %s" % (line_info[4], line_info[5])
+                        if method_record[0].isalpha():
+                            method_key = java_shorty2full(method_record)
+                            perm_map_key = match_axplorer_map(method_key, axplorer_map)
+                            if perm_map_key is not None:
+                                perm_set = axplorer_map[perm_map_key] & granted_perms
+                                if len(perm_set):
+                                    if tid not in trace_obj:
+                                        trace_obj[tid] = {"name": tid2tname[tid], "perm": {}}
+                                    trace_obj[tid]["perm"][method_key] = list(perm_set)
+                        idx += 1
+
+                    trace_perm_list.append(trace_obj)
                 return trace_perm_list
 
         event_path_pair = ("%s/events/event_" % apk_data_path, ".json")
@@ -113,18 +201,23 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
                                for x in next(os.walk("%s/states" % apk_data_path))[2]
                                if x.endswith(".jpg")]
 
-        common_tags = list(set(event_tag_list) & set(trace_tag_list) &
-                           set(state_tag_list) & set(screenshot_tag_list))
-        common_tags.sort()
+        event_common_tags = sorted(set(event_tag_list) & set(trace_tag_list))[:10]
+        event_common_tags.sort()
+        state_common_tags = sorted(set(state_tag_list) & set(screenshot_tag_list))
+        state_common_tags.sort()
 
         event_list = load_jsons(["%s%s%s" % (event_path_pair[0], x, event_path_pair[1])
-                                 for x in common_tags])
+                                 for x in event_common_tags])
         trace_perm_list = load_trace_perms(["%s%s%s" % (trace_path_pair[0], x, trace_path_pair[1])
-                                            for x in common_tags])
+                                            for x in event_common_tags])
+
         state_list = load_jsons(["%s%s%s" % (state_path_pair[0], x, state_path_pair[1])
-                                 for x in common_tags])
+                                 for x in state_common_tags])
+        state_dict = {x["state_str"]: x for x in state_list}
         screenshot_list = ["%s%s%s" % (screenshot_path_pair[0], x, screenshot_path_pair[1])
-                           for x in common_tags]
+                           for x in state_common_tags]
+        screenshot_dict = {state_list[x]["state_str"]: screenshot_list[x]
+                           for x in range(len(state_list))}
 
         # start_perm_rule:
         # {"packageName": ..., "permission": []}
@@ -135,11 +228,15 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
         # UI_perm_rules:
         # {<viewContextStr>: {"viewInfoStr": ..., "permission": [], "screenshotPath": ...}}
 
-        for rule_tuple in zip(event_list, trace_perm_list, state_list, screenshot_list):
+        for rule_tuple in zip(event_list, trace_perm_list):
             event = rule_tuple[0]
             trace_perm = rule_tuple[1]
-            state = rule_tuple[2]
-            screenshot = rule_tuple[3]
+            state_str = event["start_state"]
+            if state_str not in state_dict:
+                print(state_str)
+                continue
+            state = state_dict[state_str]
+            screenshot = screenshot_dict[state_str]
 
             activity = state["foreground_activity"]
             if activity in exclude_activities:
@@ -200,6 +297,9 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
                 "eventType": "BACK" if "name" in event["event"] else "TOUCH",
                 "bounds": this_view["bounds"]
             })
+        # no rules
+        if package_name not in ui_perm_rules:
+            ui_perm_rules[package_name] = {}
         # output screenshots
         for activity in ui_perm_rules[package_name]:
             for view_info in ui_perm_rules[package_name][activity]:
@@ -219,6 +319,8 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, psc
 
         # output perm rules
         with open("%s/perm_rules/%s.json" % (output_path, package_name), "w") as output_file:
+            print(start_perm_rules)
+            print(ui_perm_rules)
             json.dump({
                 "start_perm_rules": start_perm_rules[package_name],
                 "ui_perm_rules": ui_perm_rules[package_name]
@@ -243,10 +345,10 @@ def run(config_json_path):
     """
     parse config file and assign work to multiple processes
     """
-    config_json = json.load(open(os.path.abspath(config_json_path), "r"))
+    config_json = json.load(open(config_json_path, "r"))
 
-    pscout_path = os.path.abspath(config_json["pscout_path"])
-    pscout_map = load_pscout(pscout_path)
+    axplorer_paths = config_json["axplorer_paths"]
+    axplorer_map = load_axplorer(axplorer_paths)
 
     droidbot_out_path = os.path.abspath(config_json["droidbot_out_dir"])
     output_path = os.path.abspath(config_json["output_dir"])
@@ -254,7 +356,7 @@ def run(config_json_path):
     apk_data_path_list = ["%s/%s" % (droidbot_out_path, x)
                           for x in next(os.walk(droidbot_out_path))[1]]
 
-    assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, pscout_map)
+    assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, axplorer_map)
 
 
 def parse_args():
