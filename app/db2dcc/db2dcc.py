@@ -143,7 +143,10 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, axp
                 # TODO: filter background services
                 # each element in the list is a dict -> {(tid, tname): {"method", perm_set}}
                 trace_perm_list = []
-                for trace_path in trace_path_list:
+                trace_max_seq_counter = {}
+                for max_seq_counter, trace_path in enumerate(trace_path_list):
+                    if not max_seq_counter % 100:
+                        print(max_seq_counter, "/", len(trace_path_list))
                     p = subprocess.Popen(["dmtracedump", "-o", trace_path], stdout=subprocess.PIPE)
                     trace_str = p.communicate()[0].decode()
 
@@ -166,20 +169,53 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, axp
                     trace_obj = {}
                     while len(trace_lines[idx]):
                         line_info = TRACE_ITEM_RE.match(trace_lines[idx]).groups()
-                        tid = int(line_info[0])
 
+                        tid = int(line_info[0])
+                        if tid not in tid2tname:
+                            idx += 1
+                            continue
+                        tname = tid2tname[tid]
                         method_record = "%s %s" % (line_info[4], line_info[5])
-                        if method_record[0].isalpha():
+                        if line_info[1] == "ent" and method_record[0].isalpha():
                             method_key = java_shorty2full(method_record)
                             perm_map_key = match_axplorer_map(method_key, axplorer_map)
                             if perm_map_key is not None:
                                 perm_set = axplorer_map[perm_map_key] & granted_perms
                                 if len(perm_set):
-                                    if tid not in trace_obj:
-                                        trace_obj[tid] = {"name": tid2tname[tid], "perm": {}}
-                                    trace_obj[tid]["perm"][method_key] = list(perm_set)
-                        idx += 1
+                                    # count this method for filtering
+                                    count_key = json.dumps({
+                                        "tid": tid,
+                                        "name": tname,
+                                        "method": perm_map_key
+                                    })
+                                    if count_key not in trace_max_seq_counter:
+                                        trace_max_seq_counter[count_key] = {
+                                            "curr_seq": 0,
+                                            "max_seq": 0,
+                                            "last_counter": -1
+                                        }
+                                    counter = trace_max_seq_counter[count_key]
+                                    # merge multiple calls in one trace
+                                    if counter["last_counter"] < max_seq_counter:
+                                        counter["curr_seq"] += 1
+                                        if counter["curr_seq"] > counter["max_seq"]:
+                                            counter["max_seq"] = counter["curr_seq"]
+                                        # new seq. cancel max_seq += 1, reset curr_seq
+                                        if counter["last_counter"] != -1 and \
+                                           counter["last_counter"] + 1 < max_seq_counter:
+                                            counter["max_seq"] -= 1
+                                            counter["curr_seq"] = 1
+                                        counter["last_counter"] = max_seq_counter
 
+                                        # only record first appearance
+                                        if counter["curr_seq"] == 1:
+                                            if tid not in trace_obj:
+                                                trace_obj[tid] = {"name": tname, "perm": {}}
+                                            trace_obj[tid]["perm"][method_key] = list(perm_set)
+                                        else:
+                                            # print(count_key, counter)
+                                            pass
+                        idx += 1
                     trace_perm_list.append(trace_obj)
                 return trace_perm_list
 
@@ -188,20 +224,20 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, axp
         state_path_pair = ("%s/states/state_" % apk_data_path, ".json")
         screenshot_path_pair = ("%s/states/screen_" % apk_data_path, ".jpg")
 
-        event_tag_list = [x[len("event_"):-len(".json")]
-                          for x in next(os.walk("%s/events" % apk_data_path))[2]
-                          if x.endswith(".json")]
-        trace_tag_list = [x[len("event_trace_"):-len(".trace")]
-                          for x in next(os.walk("%s/events" % apk_data_path))[2]
-                          if x.endswith(".trace")]
-        state_tag_list = [x[len("state_"):-len(".json")]
-                          for x in next(os.walk("%s/states" % apk_data_path))[2]
-                          if x.endswith(".json")]
-        screenshot_tag_list = [x[len("screen_"):-len(".jpg")]
-                               for x in next(os.walk("%s/states" % apk_data_path))[2]
-                               if x.endswith(".jpg")]
+        event_tag_list = sorted([x[len("event_"):-len(".json")]
+                                 for x in next(os.walk("%s/events" % apk_data_path))[2]
+                                 if x.endswith(".json")])
+        trace_tag_list = sorted([x[len("event_trace_"):-len(".trace")]
+                                 for x in next(os.walk("%s/events" % apk_data_path))[2]
+                                 if x.endswith(".trace")])
+        state_tag_list = sorted([x[len("state_"):-len(".json")]
+                                 for x in next(os.walk("%s/states" % apk_data_path))[2]
+                                 if x.endswith(".json")])
+        screenshot_tag_list = sorted([x[len("screen_"):-len(".jpg")]
+                                     for x in next(os.walk("%s/states" % apk_data_path))[2]
+                                     if x.endswith(".jpg")])
 
-        event_common_tags = sorted(set(event_tag_list) & set(trace_tag_list))[:10]
+        event_common_tags = sorted(set(event_tag_list) & set(trace_tag_list))
         event_common_tags.sort()
         state_common_tags = sorted(set(state_tag_list) & set(screenshot_tag_list))
         state_common_tags.sort()
@@ -232,8 +268,10 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, axp
             event = rule_tuple[0]
             trace_perm = rule_tuple[1]
             state_str = event["start_state"]
+            # some heuristic rules
+            if event["start_state"] == event["stop_state"]:
+                continue
             if state_str not in state_dict:
-                print(state_str)
                 continue
             state = state_dict[state_str]
             screenshot = screenshot_dict[state_str]
@@ -271,6 +309,15 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, axp
             else:
                 continue
 
+            # some heuristic rules
+            # filter abnormal area
+            len_x = this_view["bounds"][1][0] - this_view["bounds"][0][0]
+            len_y = this_view["bounds"][1][1] - this_view["bounds"][0][1]
+            if len_x * len_y <= 0:
+                continue
+            if abs(len_x) > 100 * abs(len_y) or abs(len_y) > 100 * abs(len_x):
+                continue
+
             # a little smaller to get rid of 0.5 in Rect Java class...
             this_rect = "%d %d %d %d" % (this_view["bounds"][0][0] + 2,
                                          this_view["bounds"][0][1] + 2,
@@ -297,9 +344,36 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, axp
                 "eventType": "BACK" if "name" in event["event"] else "TOUCH",
                 "bounds": this_view["bounds"]
             })
+
         # no rules
         if package_name not in ui_perm_rules:
             ui_perm_rules[package_name] = {}
+        # filter repeating viewCtxStr and viewInfoStr
+        for activity in ui_perm_rules[package_name]:
+            new_perm_rules = {}
+            for perm_rule in ui_perm_rules[package_name][activity]:
+                view_key = "%s %s" % (perm_rule["viewCtxStr"], perm_rule["viewInfoStr"])
+                if view_key not in new_perm_rules:
+                    new_perm_rules[view_key] = perm_rule
+                else:
+                    origin_perms = new_perm_rules[view_key]["permission"]
+                    new_perms = perm_rule["permission"]
+                    common_tids = set(origin_perms) & set(new_perms)
+                    common_perms = {}
+                    for tid in common_tids:
+                        if origin_perms[tid]["name"] == new_perms[tid]["name"]:
+                            common_methods = set(origin_perms[tid]["perm"]) & \
+                                             set(new_perms[tid]["perm"])
+                            for method in common_methods:
+                                common_perm = set(origin_perms[tid]["perm"][method]) & \
+                                              set(new_perms[tid]["perm"][method])
+                                if len(common_perm):
+                                    if tid not in common_perms:
+                                        common_perms[tid] = {"name": new_perms[tid]["name"], "perm": {}}
+                                    common_perms[tid]["perm"][method] = list(common_perm)
+                    origin_perms = common_perms
+            ui_perm_rules[package_name][activity] = list(new_perm_rules.values())
+
         # output screenshots
         for activity in ui_perm_rules[package_name]:
             for view_info in ui_perm_rules[package_name][activity]:
@@ -319,8 +393,6 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, axp
 
         # output perm rules
         with open("%s/perm_rules/%s.json" % (output_path, package_name), "w") as output_file:
-            print(start_perm_rules)
-            print(ui_perm_rules)
             json.dump({
                 "start_perm_rules": start_perm_rules[package_name],
                 "ui_perm_rules": ui_perm_rules[package_name]
