@@ -118,8 +118,6 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, axp
 
         package_name = apk_data_path.split("/")[-1]
         print(package_name)
-        if "lj" not in package_name:
-            continue
 
         def load_jsons(json_path_list):
             json_list = []
@@ -293,6 +291,8 @@ def assemble_perm_rules(apk_data_path_list, output_path, exclude_activities, axp
             state_str = event["start_state"]
 
             if state_str not in state_dict:
+                continue
+            if event["start_state"] == event["stop_state"]:
                 continue
             state = state_dict[state_str]
             screenshot = screenshot_dict[state_str]
