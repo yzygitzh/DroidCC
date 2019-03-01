@@ -1,0 +1,16 @@
+{
+    "screen_res": [720, 1280],
+    "down_ratio": 0.25,
+
+    "text_dim": 0,
+    "image_dim": 1,
+    "interact_dim": 2,
+    "total_dims": 3,
+
+    "sdk_map_path": "sdk-map-23.txt",
+    "cp_map_path": "cp-map-23.txt",
+
+    "timezone_diff": 8,
+
+    "output_dir": "/mnt/EXT_volume/yangzy/lab_data/ui-code/training_data"
+}
