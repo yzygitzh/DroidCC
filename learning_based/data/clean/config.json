@@ -7,6 +7,8 @@
     "interact_dim": 2,
     "total_dims": 3,
 
+    "back_view": {"bounds": [[90, 1184], [270, 1280]]},
+
     "sdk_map_path": "sdk-map-23.txt",
     "cp_map_path": "cp-map-23.txt",
 

@@ -30,7 +30,7 @@ class LogCat(object):
                     if logcat_pkg_name == pkg_name:
                         ts_str = "2019-" + line_fields[0] + " " + line_fields[1].split(".")[0]
                         ts = datetime.datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
-                        ts += datetime.timedelta(self.timezone_diff)
+                        ts += datetime.timedelta(hours=self.timezone_diff)
                         ts_str = ts.strftime("%Y-%m-%d_%H%M%S")
                         self.cp_access_list.append((ts_str, method, uri))
 
@@ -120,6 +120,7 @@ class UIEvent(object):
         self.image_dim = config_json["image_dim"]
         self.interact_dim = config_json["interact_dim"]
         self.total_dims = config_json["total_dims"]
+        self.back_view = config_json["back_view"]
 
         self.state_path = state_path
         self.event_path = event_path
@@ -157,6 +158,9 @@ class UIEvent(object):
         # color the interacted element
         if "view" in self.event["event"]:
             self.__color_view(self.event["event"]["view"], self.interact_dim)
+        elif self.event["event"]["event_type"] == "key" and \
+             self.event["event"]["name"] == "BACK":
+            self.__color_view(self.back_view, self.interact_dim)
 
         # 2. process trace
         trace_idx = 0
@@ -204,9 +208,7 @@ class UIEvent(object):
         self.image_data[x_min - 1:x_max + 1, y_max:y_max + 1, draw_dim] = 0.0
 
     def __is_text_view(self, view):
-        if "text" not in view:
-            return False
-        return "edittext" in view["class"].lower()
+        return "text" in view and view["text"] is not None
 
     def visualize(self):
         plt.imshow(self.image_data, interpolation='nearest')
@@ -228,7 +230,111 @@ class UIEvent(object):
                 perm_onehot[idx] = 1.0
         return self.image_data, perm_onehot
 
-if __name__ == "__main__":
+class DroidBotOutput(object):
+    """
+    This class is to parse DroidBot's output folder to UIEvent list
+    Invalid files should be excluded at this stage
+    """
+    def __init__(self, config_json, input_dir):
+        assert os.path.exists(input_dir), "DroidBot folder doesn't exist"
+
+        # find package name
+        dumpsys_candidates = [x for x in next(os.walk(input_dir))[2]
+                              if "dumpsys" in x]
+        assert len(dumpsys_candidates) == 1, "dumpsys file doesn't exist"
+        dumpsys_filename = dumpsys_candidates[0]
+        self.pkg_name = dumpsys_filename.split("_")[-1][:-len(".txt")]
+
+        logcat_path = os.path.join(input_dir, "logcat.txt")
+        assert os.path.exists(logcat_path), "logcat.txt doesn't exist"
+        # load logcat
+        logcat = LogCat(config_json, logcat_path, self.pkg_name).get_list()
+
+        # load states
+        states_folder_path = os.path.join(input_dir, "states")
+        assert os.path.exists(states_folder_path), "states folder doesn't exist"
+        state_hash_to_path = {} # {state_hash: state_path}
+        state_paths = [os.path.join(states_folder_path, x)
+                       for x in next(os.walk(states_folder_path))[2]
+                       if ".json" in x]
+        # load non-empty and in-app states only
+        for state_path in state_paths:
+            if os.stat(state_path).st_size != 0:
+                with open(state_path, "r") as f:
+                    state_json = json.load(f)
+                    state_str = state_json["state_str"]
+                    foreground_activity = state_json["foreground_activity"]
+                    if self.pkg_name in foreground_activity:
+                        state_hash_to_path[state_str] = state_path
+
+        # load sdk_map and cp_map, and generate total perm list
+        sdk_map = SDKMap(config_json).get_mapping()
+        cp_map = CPMap(config_json).get_mapping()
+        perm_set = set()
+        for perm_list in sdk_map.values():
+            perm_set.update(perm_list)
+        for uri, method, perm_list in cp_map:
+            perm_set.update(perm_list)
+        perm_list = sorted(perm_set)
+
+        # load events
+        events_folder_path = os.path.join(input_dir, "events")
+        assert os.path.exists(events_folder_path), "events folder doesn't exist"
+        event_ids = sorted([x[len("event_"):-len(".json")]
+                            for x in next(os.walk(events_folder_path))[2]
+                            if ".json" in x])
+        # load non-empty events (including event json and trace)
+        # the same event (by event_str) is loaded only once
+        # load logcat entries as well
+        visited_event_hash = set()
+        logcat_idx = 0
+        self.ui_perm_list = []
+        for event_idx, event_id in enumerate(event_ids):
+            event_json_path = os.path.join(events_folder_path, "event_%s.json" % event_id)
+            event_trace_path = os.path.join(events_folder_path, "event_trace_%s.trace" % event_id)
+            if os.stat(event_json_path).st_size != 0 and \
+               os.path.exists(event_trace_path) and \
+               os.stat(event_trace_path).st_size != 0:
+
+                with open(event_json_path, "r") as f1, open(event_trace_path) as f2:
+                    event_json = json.load(f1)
+                    event_hash = event_json["event_str"]
+                    start_state_str = event_json["start_state"]
+                    if start_state_str in state_hash_to_path and \
+                       event_hash not in visited_event_hash:
+                        visited_event_hash.add(event_hash)
+                        state_path = state_hash_to_path[start_state_str]
+
+                        # add logcat entries
+                        curr_logcat_entries = []
+                        while logcat_idx < len(logcat) and \
+                              logcat[logcat_idx][0] < event_ids[event_idx]:
+                            logcat_idx += 1
+                        while logcat_idx < len(logcat) and \
+                              (event_idx + 1 == len(event_ids) or \
+                              logcat[logcat_idx][0] < event_ids[event_idx + 1]):
+                            curr_logcat_entries.append(logcat[logcat_idx])
+                            # print(logcat[logcat_idx])
+                            logcat_idx += 1
+
+                        ui_event = UIEvent(config_json,
+                                           state_path,
+                                           event_json_path,
+                                           event_trace_path,
+                                           curr_logcat_entries,
+                                           sdk_map,
+                                           cp_map)
+                        # print(ui_event.perm_set)
+                        # ui_event.visualize()
+                        self.ui_perm_list.append(ui_event.to_ui_perm_mapping(perm_list))
+
+    def get_ui_perm_list(self):
+        return self.ui_perm_list
+
+    def get_pkg_name(self):
+        return self.pkg_name
+
+def test_func_1():
     test_pkg_name = "com.accuweather.android"
     test_pkg_name_2 = "com.cam001.selfie"
     test_out_path = "/mnt/DATA_volume/lab_data/ui-code/%s/droidbot_out/" % test_pkg_name
@@ -244,5 +350,13 @@ if __name__ == "__main__":
             logcat.get_list(),
             sdk_map,
             cp_map)
-        print(ui_event.perm_set)
+        # print(ui_event.perm_set)
         ui_event.visualize()
+
+def test_func_2():
+    test_pkg_name = "com.accuweather.android"
+    test_out_path = "/mnt/DATA_volume/lab_data/ui-code/%s/droidbot_out/" % test_pkg_name
+
+if __name__ == "__main__":
+    # test_func_1()
+    test_func_2()
