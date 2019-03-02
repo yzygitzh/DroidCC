@@ -14,5 +14,9 @@
 
     "timezone_diff": 8,
 
+    "word_embedding_dim": 300,
+
+    "word_embedding_path": "/mnt/EXT_volume/yangzy/lab_data/ui-code/word_embeddings.txt",
+    "text_stat_dir": "/mnt/EXT_volume/yangzy/lab_data/ui-code/text_stat",
     "output_dir": "/mnt/EXT_volume/yangzy/lab_data/ui-code/training_data"
 }

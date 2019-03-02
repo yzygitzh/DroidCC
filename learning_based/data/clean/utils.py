@@ -1,12 +1,12 @@
 #coding=utf-8
 
+import datetime
 import json
 import numpy as np
 import os
 import re
 import traceback
 
-import datetime
 from matplotlib import pyplot as plt
 
 class LogCat(object):
@@ -104,7 +104,7 @@ class UIEvent(object):
 
     def __init__(self, config_json,
                  state_path, event_path, trace_path, logcat,
-                 sdk_map, cp_map):
+                 sdk_map, cp_map, word_embedding):
         """
         Load screenshot, state json, event json and event method trace
         :param config_json: loaded JSON object of config file
@@ -121,6 +121,7 @@ class UIEvent(object):
         self.interact_dim = config_json["interact_dim"]
         self.total_dims = config_json["total_dims"]
         self.back_view = config_json["back_view"]
+        self.word_embedding_dim = config_json["word_embedding_dim"]
 
         self.state_path = state_path
         self.event_path = event_path
@@ -130,6 +131,8 @@ class UIEvent(object):
 
         self.sdk_map = sdk_map
         self.cp_map = cp_map
+        self.word_embedding = word_embedding
+        self.text_cleaner = TextCleaner()
 
         self.state = None
         with open(self.state_path, "r") as f:
@@ -150,17 +153,49 @@ class UIEvent(object):
                                    dtype=np.float32)
 
         # traverse state view hierarchy
+        # generate ui text and resource_id embedding
+        self.ui_text_embedding = []
+        self.ui_resource_id_embedding = []
+
         for view in self.state["views"]:
             if len(view["children"]) == 0:
                 draw_dim = self.text_dim if self.__is_text_view(view) else self.image_dim
                 self.__color_view(view, draw_dim)
+                text_embeddings, resource_id_embeddings = self.__process_view_text(view)
+                self.ui_text_embedding += text_embeddings
+                self.ui_resource_id_embedding += resource_id_embeddings
+
+        self.ui_text_embedding = np.average(self.ui_text_embedding, axis=0) \
+                                 if len(self.ui_text_embedding) > 0 \
+                                 else np.zeros(self.word_embedding_dim)
+        self.ui_resource_id_embedding = np.average(self.ui_resource_id_embedding, axis=0) \
+                                        if len(self.ui_resource_id_embedding) > 0 \
+                                        else np.zeros(self.word_embedding_dim)
 
         # color the interacted element
+        # generate element text and resource_id embedding
+        self.elem_text_embedding = []
+        self.elem_resource_id_embedding = []
+
         if "view" in self.event["event"]:
             self.__color_view(self.event["event"]["view"], self.interact_dim)
+            self.elem_text_embedding, self.elem_resource_id_embeddings = \
+                self.__process_view_text(self.event["event"]["view"])
         elif self.event["event"]["event_type"] == "key" and \
              self.event["event"]["name"] == "BACK":
             self.__color_view(self.back_view, self.interact_dim)
+
+        self.elem_text_embedding = np.average(self.elem_text_embedding, axis=0) \
+                                   if len(self.elem_text_embedding) > 0 \
+                                   else np.zeros(self.word_embedding_dim)
+        self.elem_resource_id_embedding = np.average(self.elem_resource_id_embedding, axis=0) \
+                                          if len(self.elem_resource_id_embedding) > 0 \
+                                          else np.zeros(self.word_embedding_dim)
+
+        assert self.ui_text_embedding.shape == (self.word_embedding_dim,), "embedding shape error"
+        assert self.ui_resource_id_embedding.shape == (self.word_embedding_dim,), "embedding shape error"
+        assert self.elem_text_embedding.shape == (self.word_embedding_dim,), "embedding shape error"
+        assert self.elem_resource_id_embedding.shape == (self.word_embedding_dim,), "embedding shape error"
 
         # 2. process trace
         trace_idx = 0
@@ -187,6 +222,28 @@ class UIEvent(object):
             for cp_regex, cp_method, cp_perm_list in self.cp_map:
                 if cp_regex.fullmatch(uri) is not None and cp_method == method:
                     self.perm_set.update(cp_perm_list)
+
+    def __process_view_text(self, view):
+        text_embeddings = []
+        resource_id_embeddings = []
+        if "text" in view and view["text"] is not None:
+            word_list = self.text_cleaner.clean(view["text"])
+            for word in word_list:
+                if word in self.word_embedding:
+                    # print(word, self.word_embedding[word])
+                    text_embeddings.append(self.word_embedding[word])
+        if "resource_id" in view and view["resource_id"] is not None:
+            resource_id = view["resource_id"]
+            # print(resource_id)
+            if "/" in view["resource_id"]:
+                resource_id = resource_id.split("/")[1]
+            word_list = self.text_cleaner.clean(resource_id)
+            # print(word_list)
+            for word in word_list:
+                if word in self.word_embedding:
+                    # print(word, self.word_embedding[word])
+                    resource_id_embeddings.append(self.word_embedding[word])
+        return text_embeddings, resource_id_embeddings
 
     def __color_view(self, view, draw_dim):
         """
@@ -219,7 +276,10 @@ class UIEvent(object):
         Return image-permission mapping
         :param sdk_map: sdk method-permission mapping from axplorer
         :param cp_map: content provider query-permission mapping from axplorer
-        :return: (image, perm_list_one_hot) ui-permission ready to be fed into NN
+        :return: (image,
+                  ui_text_embedding, ui_resource_id_embedding,
+                  elem_text_embedding, elem_resource_id_embedding,
+                  perm_list_one_hot), i.e. ui-permission ready to be fed into NN
 
         image: dim 0 is ui element blocks,
                dim 1 is element interacted
@@ -228,7 +288,10 @@ class UIEvent(object):
         for idx, perm in enumerate(perm_list):
             if perm in self.perm_set:
                 perm_onehot[idx] = 1.0
-        return self.image_data, perm_onehot
+        return (self.image_data, \
+                self.ui_text_embedding, self.ui_resource_id_embedding, \
+                self.elem_text_embedding, self.elem_resource_id_embedding, \
+                perm_onehot)
 
 class DroidBotOutput(object):
     """
@@ -277,6 +340,9 @@ class DroidBotOutput(object):
             perm_set.update(perm_list)
         perm_list = sorted(perm_set)
 
+        # load text processors
+        self.word_embedding = WordEmbedding(config_json).get_embedding()
+
         # load events
         events_folder_path = os.path.join(input_dir, "events")
         assert os.path.exists(events_folder_path), "events folder doesn't exist"
@@ -323,7 +389,8 @@ class DroidBotOutput(object):
                                            event_trace_path,
                                            curr_logcat_entries,
                                            sdk_map,
-                                           cp_map)
+                                           cp_map,
+                                           self.word_embedding)
                         # print(ui_event.perm_set)
                         # ui_event.visualize()
                         self.ui_perm_list.append(ui_event.to_ui_perm_mapping(perm_list))
@@ -333,6 +400,47 @@ class DroidBotOutput(object):
 
     def get_pkg_name(self):
         return self.pkg_name
+
+class TextCleaner(object):
+    def __init__(self):
+        from nltk.corpus import stopwords
+        self.stop = stopwords.words("english")
+
+        # used to convert isTestKey to is_test_key
+        self.first_cap_re = re.compile("(.)([A-Z][a-z]+)")
+        self.all_cap_re = re.compile("([a-z0-9])([A-Z])")
+
+        # consider english only
+        self.eng_re = re.compile("[a-z]+")
+
+    def __id_convert(self, name):
+        s1 = self.first_cap_re.sub(r"\1_\2", name)
+        return self.all_cap_re.sub(r"\1_\2", s1).lower()
+
+    def clean(self, text):
+        alnum_str = re.sub(r"[^\w\s]", " ", text)
+        raw_words = alnum_str.split()
+        word_list = []
+        for word in raw_words:
+            if len(word) > 0:
+                word_list += [x for x in self.__id_convert(word).split("_")
+                              if x not in self.stop and self.eng_re.fullmatch(x) is not None]
+        return word_list
+
+class WordEmbedding(object):
+    def __init__(self, config_json):
+        word_embedding_path = config_json["word_embedding_path"]
+        self.word_embedding = {}
+        with open(word_embedding_path, "r") as f:
+            entries = f.readlines()
+            for entry in entries:
+                fields = entry.strip().split()
+                word = fields[0]
+                embedding = np.array([float(x) for x in fields[1:]])
+                self.word_embedding[word] = embedding
+
+    def get_embedding(self):
+        return self.word_embedding
 
 def test_func_1():
     test_pkg_name = "com.accuweather.android"
@@ -349,13 +457,15 @@ def test_func_1():
             os.path.join(test_out_path, "events", "event_trace_2019-01-14_140930.trace"),
             logcat.get_list(),
             sdk_map,
-            cp_map)
+            cp_map,
+            WordEmbedding(config_json))
         # print(ui_event.perm_set)
         ui_event.visualize()
 
 def test_func_2():
-    test_pkg_name = "com.accuweather.android"
-    test_out_path = "/mnt/DATA_volume/lab_data/ui-code/%s/droidbot_out/" % test_pkg_name
+    test_text = "why_ads basBreaker HelloGuys! world talks"
+    tc = TextCleaner()
+    print(tc.clean(test_text))
 
 if __name__ == "__main__":
     # test_func_1()
