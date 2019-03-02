@@ -1,4 +1,5 @@
 .vscode/
 .classpath
 .project
+*.pyc
 
