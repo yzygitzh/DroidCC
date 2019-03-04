@@ -13,6 +13,7 @@
 
     "learning_rate": 0.001,
     "weight_decay": 0.01,
+    "focal_loss_gamma": 2.0,
     "log_step": 100,
     "snapshot_step": 5000,
     "max_iter": 500000

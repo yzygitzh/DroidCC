@@ -14,6 +14,7 @@ class BaseModel():
         self.image_channels = config_json["image_channels"]
         self.total_perms = config_json["total_perms"]
         self.word_embedding_dim = config_json["word_embedding_dim"]
+        self.focal_loss_gamma = config_json["focal_loss_gamma"]
         self.training = training
 
         if self.training:
@@ -151,14 +152,14 @@ class BaseModel():
 
         self.fc = tf.layers.dense(self.combined_out,
                                   self.total_perms,
-                                  activation=tf.nn.relu,
+                                  activation=tf.nn.sigmoid,
                                   kernel_regularizer=self.regularizer,
                                   bias_regularizer=self.regularizer,
                                   name="fc")
-        # perm loss
-        self.perm_loss = tf.losses.sigmoid_cross_entropy(self.true_perms,
-                                                         self.fc)
-        self.predict_perms = tf.sigmoid(self.fc)
+        # use focal loss from Kaiming He
+        self.pt = self.true_perms * self.fc + (1 - self.true_perms) * (1 - self.fc)
+        self.perm_loss = -tf.reduce_mean(((1 - self.pt) ** self.focal_loss_gamma) * tf.log(self.pt))
+        tf.losses.add_loss(self.perm_loss)
 
         # total loss
         self.total_loss = tf.losses.get_total_loss()
@@ -194,7 +195,7 @@ class SingleScreenModel(BaseModel):
                          max_outputs=self.batch_size)
         tf.summary.histogram("normalized_images", self.normalized_images)
         tf.summary.histogram("true_perms", self.true_perms)
-        tf.summary.histogram("predict_perms", self.predict_perms)
+        tf.summary.histogram("fc", self.fc)
 
         tf.summary.histogram("conv1_activation", self.conv1)
         tf.summary.histogram("conv2_activation", self.conv2)
