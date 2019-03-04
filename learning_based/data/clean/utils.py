@@ -271,6 +271,13 @@ class UIEvent(object):
         plt.imshow(self.image_data, interpolation='nearest')
         plt.show()
 
+    def get_perm_onehot(self, perm_list):
+        perm_onehot = np.zeros(len(perm_list), dtype=np.float32)
+        for idx, perm in enumerate(perm_list):
+            if perm in self.perm_set:
+                perm_onehot[idx] = 1.0
+        return perm_onehot
+
     def to_ui_perm_mapping(self, perm_list):
         """
         Return image-permission mapping
@@ -284,14 +291,10 @@ class UIEvent(object):
         image: dim 0 is ui element blocks,
                dim 1 is element interacted
         """
-        perm_onehot = np.zeros(len(perm_list), dtype=np.float32)
-        for idx, perm in enumerate(perm_list):
-            if perm in self.perm_set:
-                perm_onehot[idx] = 1.0
-        return (self.image_data, \
+        return [self.image_data, \
                 self.ui_text_embedding, self.ui_resource_id_embedding, \
                 self.elem_text_embedding, self.elem_resource_id_embedding, \
-                perm_onehot)
+                self.get_perm_onehot(perm_list)]
 
 class DroidBotOutput(object):
     """
@@ -350,11 +353,10 @@ class DroidBotOutput(object):
                             for x in next(os.walk(events_folder_path))[2]
                             if ".json" in x])
         # load non-empty events (including event json and trace)
-        # the same event (by event_str) is loaded only once
+        # the same event (by event_str) is united
         # load logcat entries as well
-        visited_event_hash = set()
+        event_hash_to_ui_perm_mapping = {} # {state_hash: state_path}
         logcat_idx = 0
-        self.ui_perm_list = []
         for event_idx, event_id in enumerate(event_ids):
             event_json_path = os.path.join(events_folder_path, "event_%s.json" % event_id)
             event_trace_path = os.path.join(events_folder_path, "event_trace_%s.trace" % event_id)
@@ -366,9 +368,7 @@ class DroidBotOutput(object):
                     event_json = json.load(f1)
                     event_hash = event_json["event_str"]
                     start_state_str = event_json["start_state"]
-                    if start_state_str in state_hash_to_path and \
-                       event_hash not in visited_event_hash:
-                        visited_event_hash.add(event_hash)
+                    if start_state_str in state_hash_to_path:
                         state_path = state_hash_to_path[start_state_str]
 
                         # add logcat entries
@@ -393,7 +393,15 @@ class DroidBotOutput(object):
                                            self.word_embedding)
                         # print(ui_event.perm_set)
                         # ui_event.visualize()
-                        self.ui_perm_list.append(ui_event.to_ui_perm_mapping(perm_list))
+                        if event_hash not in event_hash_to_ui_perm_mapping:
+                            event_hash_to_ui_perm_mapping[event_hash] = ui_event.to_ui_perm_mapping(perm_list)
+                        else:
+                            origin_perm_onehot = event_hash_to_ui_perm_mapping[event_hash][-1]
+                            new_perm_onehot = ui_event.get_perm_onehot(perm_list)
+                            event_hash_to_ui_perm_mapping[event_hash][-1] = np.maximum(origin_perm_onehot,
+                                                                                       new_perm_onehot)
+                        assert len(event_hash_to_ui_perm_mapping[event_hash]) == 6, "invalid ui_event"
+        self.ui_perm_list = list(event_hash_to_ui_perm_mapping.values())
 
     def get_ui_perm_list(self):
         return self.ui_perm_list

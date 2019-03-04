@@ -158,7 +158,8 @@ class BaseModel():
                                   name="fc")
         # use focal loss from Kaiming He
         self.pt = self.true_perms * self.fc + (1 - self.true_perms) * (1 - self.fc)
-        self.perm_loss = -tf.reduce_mean(((1 - self.pt) ** self.focal_loss_gamma) * tf.log(self.pt))
+        self.perm_loss = -tf.reduce_mean(
+            tf.reduce_sum(((1 - self.pt) ** self.focal_loss_gamma) * tf.log(self.pt), axis=1))
         tf.losses.add_loss(self.perm_loss)
 
         # total loss

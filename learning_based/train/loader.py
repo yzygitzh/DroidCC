@@ -81,31 +81,29 @@ class SingleScreenLoader(Loader):
 
     def next_batch_consumer(self):
         # always try to get data
-        batch_tuple = None
+        batch_list = None
         for i in range(self.batch_size):
             data_item = self.data_queue.get()
-            if batch_tuple is None:
-                batch_tuple = tuple([] for _ in range(len(data_item)))
-            for idx in range(len(batch_tuple)):
-                batch_tuple[idx].append(data_item[idx])
-        stacked_tuple = ()
-        for idx in range(len(batch_tuple)):
-            stacked_tuple += (np.stack(batch_tuple[idx]),)
+            if batch_list is None:
+                batch_list = [[] for _ in range(len(data_item))]
+            for idx in range(len(batch_list)):
+                batch_list[idx].append(data_item[idx])
+        batch_list = [np.stack(x) for x in batch_list]
 
-        assert stacked_tuple[0].shape == (self.batch_size, self.x_dim, self.y_dim, self.image_channels), \
-            "image dimension not correct: " + stacked_tuple[0].shape
-        assert stacked_tuple[1].shape == (self.batch_size, self.word_embedding_dim), \
-            "ui_text dimension not correct: " + stacked_tuple[1].shape
-        assert stacked_tuple[2].shape == (self.batch_size, self.word_embedding_dim), \
-            "ui_resource_id dimension not correct: " + stacked_tuple[2].shape
-        assert stacked_tuple[3].shape == (self.batch_size, self.word_embedding_dim), \
-            "elem_text dimension not correct: " + stacked_tuple[3].shape
-        assert stacked_tuple[4].shape == (self.batch_size, self.word_embedding_dim), \
-            "text_resource_id dimension not correct: " + stacked_tuple[4].shape
-        assert stacked_tuple[5].shape == (self.batch_size, self.total_perms), \
-            "perms dimension not correct: " + stacked_tuple[5].shape
+        assert batch_list[0].shape == (self.batch_size, self.x_dim, self.y_dim, self.image_channels), \
+            "image dimension not correct: " + batch_list[0].shape
+        assert batch_list[1].shape == (self.batch_size, self.word_embedding_dim), \
+            "ui_text dimension not correct: " + batch_list[1].shape
+        assert batch_list[2].shape == (self.batch_size, self.word_embedding_dim), \
+            "ui_resource_id dimension not correct: " + batch_list[2].shape
+        assert batch_list[3].shape == (self.batch_size, self.word_embedding_dim), \
+            "elem_text dimension not correct: " + batch_list[3].shape
+        assert batch_list[4].shape == (self.batch_size, self.word_embedding_dim), \
+            "text_resource_id dimension not correct: " + batch_list[4].shape
+        assert batch_list[5].shape == (self.batch_size, self.total_perms), \
+            "perms dimension not correct: " + batch_list[5].shape
 
-        return stacked_tuple
+        return batch_list
 
     def next_batch(self):
         if self.loading_thread is None:
