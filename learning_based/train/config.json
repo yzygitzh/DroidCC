@@ -1,0 +1,19 @@
+{
+    "training_data_dir": "/mnt/EXT_volume/yangzy/lab_data/ui-code/training_data/",
+    "validation_data_dir": "/mnt/EXT_volume/yangzy/lab_data/ui-code/validation_data/",
+    "log_data_dir": "/mnt/EXT_volume/yangzy/lab_data/ui-code/training_log/",
+
+    "screen_res": [180, 320],
+    "image_channels": 3,
+    "total_perms": 54,
+    "word_embedding_dim": 300,
+
+    "batch_size": 64,
+    "data_buffer_size": 10000,
+
+    "learning_rate": 0.001,
+    "weight_decay": 0.01,
+    "log_step": 100,
+    "snapshot_step": 5000,
+    "max_iter": 500000
+}
