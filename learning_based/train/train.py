@@ -61,7 +61,7 @@ def run(config_path):
     data_loader.stop()
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Humanoid training script")
+    parser = argparse.ArgumentParser(description="DroidCC training script")
     parser.add_argument("-c", action="store", dest="config_path",
                         required=True, help="path/to/config.json")
     options = parser.parse_args()
