@@ -86,17 +86,17 @@ class SingleScreenLoader(object):
         batch_list = [np.stack(x) for x in batch_list]
 
         assert batch_list[0].shape == (self.batch_size, self.x_dim, self.y_dim, self.image_channels), \
-            "image dimension not correct: " + batch_list[0].shape
+            "image dimension not correct: " + str(batch_list[0].shape)
         assert batch_list[1].shape == (self.batch_size, self.word_embedding_dim), \
-            "ui_text dimension not correct: " + batch_list[1].shape
+            "ui_text dimension not correct: " + str(batch_list[1].shape)
         assert batch_list[2].shape == (self.batch_size, self.word_embedding_dim), \
-            "ui_resource_id dimension not correct: " + batch_list[2].shape
+            "ui_resource_id dimension not correct: " + str(batch_list[2].shape)
         assert batch_list[3].shape == (self.batch_size, self.word_embedding_dim), \
-            "elem_text dimension not correct: " + batch_list[3].shape
+            "elem_text dimension not correct: " + str(batch_list[3].shape)
         assert batch_list[4].shape == (self.batch_size, self.word_embedding_dim), \
-            "text_resource_id dimension not correct: " + batch_list[4].shape
+            "text_resource_id dimension not correct: " + str(batch_list[4].shape)
         assert batch_list[5].shape == (self.batch_size, self.total_perms), \
-            "perms dimension not correct: " + batch_list[5].shape
+            "perms dimension not correct: " + str(batch_list[5].shape)
 
         return batch_list
 

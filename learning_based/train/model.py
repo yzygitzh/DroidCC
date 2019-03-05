@@ -9,20 +9,14 @@ class BaseModel():
     """Base model
        Build CNN and loss
     """
-    def __init__(self, config_json, training=True):
+    def __init__(self, config_json):
         self.x_dim, self.y_dim = config_json["screen_res"]
         self.image_channels = config_json["image_channels"]
         self.total_perms = config_json["total_perms"]
         self.word_embedding_dim = config_json["word_embedding_dim"]
         self.focal_loss_gamma = config_json["focal_loss_gamma"]
-        self.training = training
-
-        if self.training:
-            self.weight_decay = config_json["weight_decay"]
-            self.batch_size = config_json["batch_size"]
-        else:
-            self.weight_decay = 0.0
-            self.batch_size = 1
+        self.weight_decay = config_json["weight_decay"]
+        self.batch_size = config_json["batch_size"]
 
         self.regularizer = tf.contrib.layers.l2_regularizer(scale=self.weight_decay)
 
@@ -177,8 +171,7 @@ class SingleScreenModel(BaseModel):
         self.build_cnn()
         self.build_model()
         self.build_loss()
-        if self.training:
-            self.build_summary()
+        self.build_summary()
 
     def build_model(self):
         self.image_out = self.pool5
