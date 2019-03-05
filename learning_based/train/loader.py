@@ -12,28 +12,22 @@ import time
 import numpy as np
 import tensorflow as tf
 
-class Loader():
-    """Basic data loader
-    """
+class SingleScreenLoader(object):
     def __init__(self, config_json):
+        self.training_data_dir = config_json["training_data_dir"]
+
         self.x_dim, self.y_dim = config_json["screen_res"]
         self.image_channels = config_json["image_channels"]
         self.total_perms = config_json["total_perms"]
         self.word_embedding_dim = config_json["word_embedding_dim"]
-        self.training_data_dir = config_json["training_data_dir"]
+
+        self.batch_size = config_json["batch_size"]
+        self.data_threads = config_json["data_threads"]
+        self.data_buffer_size = config_json["data_buffer_size"]
+
         self.logger = logging.getLogger("loader")
         self.logger.setLevel(logging.INFO)
 
-    def next_batch(self):
-        pass
-
-class SingleScreenLoader(Loader):
-    """Normal single screen data loader, in contrast to debug data loader
-    """
-    def __init__(self, config_json):
-        super().__init__(config_json)
-        self.batch_size = config_json["batch_size"]
-        self.data_buffer_size = config_json["data_buffer_size"]
         self.data_files = next(os.walk(self.training_data_dir))[2]
         # self.data_files = ["jp.naver.linecard.android.pickle",
         #                    "co.brainly.pickle"]
@@ -72,9 +66,10 @@ class SingleScreenLoader(Loader):
         while not self.stopped:
             if self.data_queue.qsize() < self.data_buffer_size:
                 paths_to_load = []
-                if self.path_queue.empty():
-                    self.reload_paths()
-                paths_to_load.append(self.path_queue.get())
+                for _ in range(min(self.data_threads, len(self.data_paths))):
+                    if self.path_queue.empty():
+                        self.reload_paths()
+                    paths_to_load.append(self.path_queue.get())
                 # self.logger.info("loading: %s", paths_to_load[-1])
                 self.load_pickles(paths_to_load)
             time.sleep(0.05)

@@ -9,6 +9,7 @@
     "word_embedding_dim": 300,
 
     "batch_size": 64,
+    "data_threads": 10,
     "data_buffer_size": 10000,
 
     "learning_rate": 0.001,
