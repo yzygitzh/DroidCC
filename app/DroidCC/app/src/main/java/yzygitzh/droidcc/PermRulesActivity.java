@@ -24,7 +24,10 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 public class PermRulesActivity extends AppCompatActivity {
     private SectionsPagerAdapter mSectionsPagerAdapter;
@@ -110,9 +113,20 @@ public class PermRulesActivity extends AppCompatActivity {
                                 .getJSONArray(getArguments().getString(Utils.ACTIVITY_NAME))
                                 .getJSONObject(getArguments().getInt(SECTION_NUMBER));
 
-                        JSONArray perms = UIPermRule.getJSONArray("permission");
-                        for (int i = 0; i < perms.length(); i++) {
-                            String permission = perms.getString(i);
+                        Set<String> permSet = new HashSet<String>();
+                        JSONObject tInfos = UIPermRule.getJSONObject(Utils.VIEW_PERM_KEY);
+                        Iterator<String> tInfoItr = tInfos.keys();
+                        while (tInfoItr.hasNext()) {
+                            JSONObject permInfos = tInfos.getJSONObject(tInfoItr.next()).getJSONObject(Utils.PERM_RULES_KEY);
+                            Iterator<String> permInfoItr = permInfos.keys();
+                            while (permInfoItr.hasNext()) {
+                                JSONArray permList = permInfos.getJSONArray(permInfoItr.next());
+                                for (int i = 0; i < permList.length(); i++) {
+                                    permSet.add(permList.getString(i));
+                                }
+                            }
+                        }
+                        for (String permission : permSet) {
                             boolean status = Utils.getStartPermRuleStatus(getArguments().getString(Utils.PACKAGE_NAME), permission);
                             mListContents.add(new PermRuleContent(
                                     UIPermRule.getString(Utils.EVENT_VIEWCTXSTR),

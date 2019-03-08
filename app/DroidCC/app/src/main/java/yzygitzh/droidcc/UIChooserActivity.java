@@ -16,8 +16,10 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 public class UIChooserActivity extends AppCompatActivity {
     private ListView mUIListView, mStartListView;
@@ -50,7 +52,7 @@ public class UIChooserActivity extends AppCompatActivity {
 
                 mUIListContents.clear();
                 try {
-                    JSONObject UIPermRules = (JSONObject) Utils.getPermRules().get(packageName).get(Utils.UI_PERM_RULES);
+                    JSONObject UIPermRules = Utils.getPermRules().get(packageName).getJSONObject(Utils.UI_PERM_RULES);
                     Iterator<String> keyItr = UIPermRules.keys();
                     while (keyItr.hasNext()) mUIListContents.add(keyItr.next());
                 } catch (JSONException e) {
@@ -59,11 +61,22 @@ public class UIChooserActivity extends AppCompatActivity {
 
                 mStartListContents.clear();
                 try {
-                    JSONArray perms = (JSONArray) Utils.getPermRules().get(packageName).get(Utils.START_PERM_RULES);
-                    for (int i = 0; i < perms.length(); i++) {
-                        String permission = perms.getString(i);
+                    Set<String> permSet = new HashSet<String>();
+                    JSONObject tInfos = Utils.getPermRules().get(packageName).getJSONObject(Utils.START_PERM_RULES);
+                    Iterator<String> tInfoItr = tInfos.keys();
+                    while (tInfoItr.hasNext()) {
+                        JSONObject permInfos = tInfos.getJSONObject(tInfoItr.next()).getJSONObject(Utils.PERM_RULES_KEY);
+                        Iterator<String> permInfoItr = permInfos.keys();
+                        while (permInfoItr.hasNext()) {
+                            JSONArray permList = permInfos.getJSONArray(permInfoItr.next());
+                            for (int i = 0; i < permList.length(); i++) {
+                                permSet.add(permList.getString(i));
+                            }
+                        }
+                    }
+                    for (String permission : permSet) {
                         boolean status = Utils.getStartPermRuleStatus(packageName, permission);
-                        mStartListContents.add(new PermRuleContent(packageName, perms.getString(i)));
+                        mStartListContents.add(new PermRuleContent(packageName, permission));
                     }
                 } catch (JSONException e) {
                     e.printStackTrace();

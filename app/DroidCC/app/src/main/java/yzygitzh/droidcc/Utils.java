@@ -33,8 +33,11 @@ public class Utils {
     private static DroidCCManager mDcm;
     private static Map<String, JSONObject> mPermRules;
 
+    public static int APP_PERM_GRANTED = 0;
     public static final String UI_PERM_RULES = "ui_perm_rules";
     public static final String START_PERM_RULES = "start_perm_rules";
+    public static final String VIEW_PERM_KEY = "permission";
+    public static final String PERM_RULES_KEY = "perm";
     public static final String PACKAGE_NAME = "packageName";
     public static final String ACTIVITY_NAME = "activityName";
     public static final String EVENT_TYPE = "eventType";

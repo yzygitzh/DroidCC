@@ -2,6 +2,7 @@ package yzygitzh.droidcc;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
@@ -10,6 +11,7 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.Manifest;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,6 +20,18 @@ public class MainActivity extends AppCompatActivity {
     private ListView mMainListView;
     private ArrayAdapter<String> mMainListAdaptor;
     private List<String> mMainListContents = new ArrayList<>();
+    private boolean permGranted = false;
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        if (requestCode == Utils.APP_PERM_GRANTED &&
+            grantResults.length > 0 &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            permGranted = true;
+            initPackageList();
+        }
+    }
 
     void initPackageList() {
         final Handler textHandler = new Handler();
@@ -31,6 +45,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 super.run();
+
                 if (!Utils.initUtils(activityCtx)) return;
 
                 mMainListContents.clear();
@@ -65,7 +80,12 @@ public class MainActivity extends AppCompatActivity {
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        initPackageList();
+        if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) !=
+            PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, Utils.APP_PERM_GRANTED);
+        } else {
+            initPackageList();
+        }
     }
 
 }
