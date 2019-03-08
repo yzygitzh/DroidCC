@@ -13,11 +13,12 @@ from matplotlib import pyplot as plt
 import loader
 import model
 
-def run(config_path, output_path):
+def run(config_path):
     with open(config_path, "r") as config_file:
         config_json = json.load(config_file)
 
     total_perms = config_json["total_perms"]
+    threshold_path = config_json["threshold_path"]
     config_json["data_threads"] = 1
     config_json["data_buffer_size"] = 10
     config_json["weight_decay"] = 0.0
@@ -73,21 +74,19 @@ def run(config_path, output_path):
                     float(sorted_false_sensitivities[int(len(sorted_false_sensitivities) * 0.99)])
 
     data_loader.stop()
-    with open(output_path, "w") as f:
+    with open(threshold_path, "w") as f:
         json.dump(threshold_list, f, indent=2)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="DroidCC model threshold picker")
     parser.add_argument("-c", action="store", dest="config_path",
                         required=True, help="path/to/config.json")
-    parser.add_argument("-o", action="store", dest="output_path",
-                        required=True, help="path/to/output.txt")
     options = parser.parse_args()
     return options
 
 def main():
     opts = parse_args()
-    run(opts.config_path, opts.output_path)
+    run(opts.config_path)
     return
 
 if __name__ == "__main__":
