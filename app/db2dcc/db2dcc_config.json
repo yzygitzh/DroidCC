@@ -2,8 +2,8 @@
     "droidbot_out_dir": "/mnt/EXT_volume/lab_data/PERUIM_upgrade/PERUIM_advanced_droidbot_out/dfs_peruim",
     "output_dir": "/mnt/EXT_volume/lab_data/db2dcc_out/",
     "axplorer_paths": {
-        "sdk": "/mnt/EXT_volume/projects/DroidCC/app/db2dcc/sdk-map-24.txt",
-        "cp": "/mnt/EXT_volume/projects/DroidCC/app/db2dcc/cp-map-24.txt"
+        "sdk": "/mnt/EXT_volume/projects_light/DroidCC/app/db2dcc/sdk-map-24.txt",
+        "cp": "/mnt/EXT_volume/projects_light/DroidCC/app/db2dcc/cp-map-24.txt"
     },
     "exclude_activities": [
         "android/com.android.internal.app.ChooserActivity",
