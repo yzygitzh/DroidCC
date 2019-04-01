@@ -1,5 +1,5 @@
 root_path=/home/yzy/humanoid/
-humanoid_server=162.105.87.223:50405
+humanoid_server=162.105.87.118:50405
 
 out_tester=_humanoid
 
