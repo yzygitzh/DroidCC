@@ -22,7 +22,7 @@ if [ -z "$tested" ]; then
     for dex_path in /tmp/extract_class_methods_$2/*.dex; do
         ./extract_class_methods $dex_path > $dex_path.extracted_class_method
     done
-    cat /tmp/extract_class_methods_$2/*.extracted_class_method | sort | uniq > /tmp/extract_class_methods_$2/redroid_filters
+    cat /tmp/extract_class_methods_$2/*.extracted_class_method | sort | uniq | grep -vf ./method_blacklist.txt > /tmp/extract_class_methods_$2/redroid_filters
     adb -s localhost:$2 push /tmp/extract_class_methods_$2/redroid_filters /data/local/tmp/
     rm -rf /tmp/extract_class_methods_$2
 
