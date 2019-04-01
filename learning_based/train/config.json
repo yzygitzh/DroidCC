@@ -1,8 +1,9 @@
 {
     "training_data_dir": "/mnt/EXT_volume/yangzy/lab_data/ui-code/training_data/",
-    "validation_data_dir": "/mnt/DATA_volume/lab_data/ui-code/validation_data/",
+    "validation_data_dir": "/mnt/EXT_volume/yangzy/lab_data/ui-code/validation_data/",
     "log_data_dir": "/mnt/EXT_volume/yangzy/lab_data/ui-code/training_log/",
-    "model_path": "/mnt/DATA_volume/lab_data/ui-code/test_models/model_20000.ckpt",
+    "model_path": "/mnt/EXT_volume/yangzy/lab_data/ui-code/training_log/model_495000.ckpt",
+    "threshold_path": "/mnt/EXT_volume/yangzy/lab_data/ui-code/threshold.json",
 
     "screen_res": [180, 320],
     "image_channels": 3,
