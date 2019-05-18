@@ -251,10 +251,10 @@ class UIEvent(object):
         """
         # draw view
         bounds = view["bounds"]
-        x_min = max(0, int(bounds[0][0] * self.down_ratio))
-        y_min = max(0, int(bounds[0][1] * self.down_ratio))
-        x_max = min(self.down_dim[0] - 1, int((bounds[1][0] - 1) * self.down_ratio))
-        y_max = min(self.down_dim[1] - 1, int((bounds[1][1] - 1) * self.down_ratio))
+        x_min = int(bounds[0][0] * self.down_ratio)
+        y_min = int(bounds[0][1] * self.down_ratio)
+        x_max = int(bounds[1][0] * self.down_ratio)
+        y_max = int(bounds[1][1] * self.down_ratio)
         if x_min >= x_max or y_min >= y_max:
             return
         self.image_data[x_min:x_max, y_min:y_max, draw_dim] = 1.0
